@@ -1,0 +1,159 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  version-check:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      version:   ${{ steps.check.outputs.version }}
+      published: ${{ steps.check.outputs.published }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read VERSION and check GitHub releases
+        id: check
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${VERSION}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}")
+
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "published=true"  >> "$GITHUB_OUTPUT"
+            echo "Already released — skipping build."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            echo "Not yet released — proceeding."
+          fi
+
+  # ── Native builds (reuse per-platform CI workflows) ───────────────────────
+  build-windows:
+    name: Build Windows native
+    needs: version-check
+    if: needs.version-check.outputs.published == 'false'
+    uses: ./.github/workflows/native-windows.yml
+
+  build-android:
+    name: Build Android native
+    needs: version-check
+    if: needs.version-check.outputs.published == 'false'
+    uses: ./.github/workflows/native-android.yml
+
+  build-apple:
+    name: Build Apple native
+    needs: version-check
+    if: needs.version-check.outputs.published == 'false'
+    uses: ./.github/workflows/native-apple.yml
+
+  # ── NuGet packaging ───────────────────────────────────────────────────────
+  pack:
+    name: Pack NuGet
+    runs-on: ubuntu-latest
+    needs: [version-check, build-windows, build-android, build-apple]
+    if: needs.version-check.outputs.published == 'false'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Download all native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: native-artifacts
+
+      - name: Arrange native libs for bindings project
+        run: |
+          N=bindings/native
+          mkdir -p $N/win-x64 $N/win-arm64
+          mkdir -p $N/android-arm64 $N/android-x64
+          mkdir -p $N/ios-arm64 $N/maccatalyst
+
+          cp native-artifacts/native-windows-x64/mbgl-cabi.dll        $N/win-x64/
+          cp native-artifacts/native-windows-arm64/mbgl-cabi.dll       $N/win-arm64/
+          cp native-artifacts/native-android-arm64-v8a/libmbgl-cabi.so $N/android-arm64/
+          cp native-artifacts/native-android-x86_64/libmbgl-cabi.so    $N/android-x64/
+          cp native-artifacts/native-ios-arm64/libmbgl-cabi.a          $N/ios-arm64/
+          cp native-artifacts/native-maccatalyst/libmbgl-cabi.a        $N/maccatalyst/
+
+          echo "Native libs arranged:"
+          find $N -type f
+
+      - name: Pack Maui.MapLibre.Native
+        run: |
+          dotnet pack bindings/Maui.MapLibre.Native.csproj \
+            -c Release \
+            -p:Version=${{ needs.version-check.outputs.version }} \
+            -p:_MbglNativeDir=$(pwd)/bindings/native/ \
+            -o artifacts/
+
+      - name: Pack Maui.Maplibre.Handlers
+        run: |
+          dotnet pack handlers/Maui.Maplibre.Handlers.csproj \
+            -c Release \
+            -p:Version=${{ needs.version-check.outputs.version }} \
+            -o artifacts/
+
+      - name: Upload NuGet artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: artifacts/*.nupkg
+          retention-days: 7
+
+  # ── GitHub Release ────────────────────────────────────────────────────────
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [version-check, pack]
+    if: needs.version-check.outputs.published == 'false'
+    environment: release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download NuGet packages
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages
+          path: artifacts/
+
+      - name: Extract changelog for version
+        run: |
+          VERSION="${{ needs.version-check.outputs.version }}"
+          if [ -f CHANGELOG.md ]; then
+            awk -v ver="## $VERSION" \
+              'BEGIN{p=0} $0==ver{p=1;next} /^## /&&p{exit} p{print}' \
+              CHANGELOG.md > release-notes.md
+          else
+            echo "Release v${VERSION}." > release-notes.md
+          fi
+          cat release-notes.md
+
+      - name: Publish GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag:          v${{ needs.version-check.outputs.version }}
+          name:         v${{ needs.version-check.outputs.version }}
+          bodyFile:     release-notes.md
+          artifacts:    artifacts/*.nupkg
+          draft:        false
+          allowUpdates: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -17,8 +17,12 @@ if(WIN32 AND EXISTS "${MAPLIBRE_NATIVE_DIR}/platform/windows/custom-toolchain.cm
         CACHE STRING "CMake toolchain file")
 endif()
 
-# ── Shared library target ─────────────────────────────────────────────────────
-add_library(mbgl-cabi SHARED)
+# ── Shared (Windows/Android) or Static (iOS/macCatalyst) library ─────────────
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS" OR CMAKE_SYSTEM_NAME STREQUAL "tvOS")
+    add_library(mbgl-cabi STATIC)
+else()
+    add_library(mbgl-cabi SHARED)
+endif()
 
 target_compile_definitions(mbgl-cabi PRIVATE
     MBGL_CABI_EXPORT

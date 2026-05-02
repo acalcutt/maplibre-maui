@@ -63,4 +63,20 @@
     </AndroidNativeLibrary>
   </ItemGroup>
 
+  <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+    <NativeReference Include="$(_MbglNativeDir)ios-arm64\libmbgl-cabi.a"
+                     Condition="Exists('$(_MbglNativeDir)ios-arm64\libmbgl-cabi.a')">
+      <Kind>Static</Kind>
+      <ForceLoad>True</ForceLoad>
+    </NativeReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+    <NativeReference Include="$(_MbglNativeDir)maccatalyst\libmbgl-cabi.a"
+                     Condition="Exists('$(_MbglNativeDir)maccatalyst\libmbgl-cabi.a')">
+      <Kind>Static</Kind>
+      <ForceLoad>True</ForceLoad>
+    </NativeReference>
+  </ItemGroup>
+
 </Project>

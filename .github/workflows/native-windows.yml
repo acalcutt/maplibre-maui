@@ -1,0 +1,96 @@
+name: Native Windows
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Windows ${{ matrix.arch }}
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+        include:
+          - arch: x64
+            runs-on: windows-latest
+            vcpkg-triplet: x64-windows
+            msvc-arch: x64
+            vs-arch: x64
+          - arch: arm64
+            runs-on: windows-11-arm
+            vcpkg-triplet: arm64-windows
+            msvc-arch: arm64
+            vs-arch: ARM64
+
+    steps:
+      - name: Enable Git long paths
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@v4
+
+      - name: Clone maplibre-native at pinned commit
+        run: |
+          git clone https://github.com/maplibre/maplibre-native.git dependencies/maplibre-native
+          git -C dependencies/maplibre-native checkout 647636bf6115e058991dd644638ba6748c9cf4c6
+          git -C dependencies/maplibre-native submodule update --init --recursive
+
+      - name: Set up MSVC developer tools
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.msvc-arch }}
+
+      - name: Get vcpkg commit ID
+        id: vcpkg-id
+        shell: pwsh
+        run: |
+          $id = git -C dependencies/maplibre-native/platform/windows/vendor/vcpkg rev-parse HEAD
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "commit_id=$id"
+
+      - name: Cache vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: dependencies/maplibre-native/platform/windows/vendor/vcpkg/archives
+          key: vcpkg-${{ matrix.vcpkg-triplet }}-${{ steps.vcpkg-id.outputs.commit_id }}
+
+      - name: Bootstrap vcpkg
+        run: dependencies\maplibre-native\platform\windows\vendor\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Configure CMake
+        shell: pwsh
+        env:
+          VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}\\dependencies\\maplibre-native\\platform\\windows\\vendor\\vcpkg\\archives,readwrite"
+        run: |
+          $maxAttempts = 3
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            Write-Host "CMake configure attempt $attempt of $maxAttempts"
+            cmake -B build `
+              -G "Visual Studio 17 2022" -A ${{ matrix.vs-arch }} `
+              -DCMAKE_TOOLCHAIN_FILE="dependencies/maplibre-native/platform/windows/custom-toolchain.cmake" `
+              -DMLN_WITH_OPENGL=ON `
+              -DMLN_WITH_EGL=OFF `
+              -DMLN_WITH_VULKAN=OFF `
+              "-DCMAKE_CXX_FLAGS=/wd4267"
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -lt $maxAttempts) {
+              Write-Host "Attempt $attempt failed (exit $LASTEXITCODE), cleaning and retrying..."
+              Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
+            } else { exit $LASTEXITCODE }
+          }
+
+      - name: Build mbgl-cabi
+        run: cmake --build build --target mbgl-cabi --config Release --parallel
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-windows-${{ matrix.arch }}
+          path: build\Release\mbgl-cabi.dll
+          retention-days: 7

@@ -1,0 +1,72 @@
+name: Native Apple
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: iOS arm64
+            cmake-system: iOS
+            cmake-sysroot: iphoneos
+            cmake-archs: arm64
+            extra-flags: ""
+            artifact: native-ios-arm64
+
+          - name: macCatalyst arm64+x64
+            cmake-system: Darwin
+            cmake-sysroot: macosx
+            cmake-archs: "x86_64;arm64"
+            extra-flags: -DCMAKE_XCODE_ATTRIBUTE_SUPPORTS_MACCATALYST=YES
+            artifact: native-maccatalyst
+
+    steps:
+      - name: Enable Git long paths
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@v4
+
+      - name: Clone maplibre-native at pinned commit
+        run: |
+          git clone https://github.com/maplibre/maplibre-native.git dependencies/maplibre-native
+          git -C dependencies/maplibre-native checkout 647636bf6115e058991dd644638ba6748c9cf4c6
+          git -C dependencies/maplibre-native submodule update --init --recursive
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Xcode \
+            -DCMAKE_SYSTEM_NAME=${{ matrix.cmake-system }} \
+            -DCMAKE_OSX_ARCHITECTURES="${{ matrix.cmake-archs }}" \
+            -DCMAKE_OSX_SYSROOT=${{ matrix.cmake-sysroot }} \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+            ${{ matrix.extra-flags }} \
+            -DMLN_WITH_METAL=ON
+
+      - name: Build mbgl-cabi
+        run: cmake --build build --target mbgl-cabi --config Release
+
+      - name: Locate built library
+        id: find-lib
+        run: |
+          LIB=$(find build -name "libmbgl-cabi.a" | head -1)
+          echo "path=$LIB" >> "$GITHUB_OUTPUT"
+          echo "Found: $LIB"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ steps.find-lib.outputs.path }}
+          retention-days: 7

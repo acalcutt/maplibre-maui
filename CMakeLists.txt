@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.15 FATAL_ERROR)
+project(maplibre-maui-ac LANGUAGES CXX C)
+
+set(MAPLIBRE_NATIVE_DIR "${CMAKE_CURRENT_LIST_DIR}/dependencies/maplibre-native"
+    CACHE PATH "Path to maplibre-native source tree")
+
+# ── Renderer feature flags (platform defaults) ────────────────────────────────
+# Pass -DCMAKE_TOOLCHAIN_FILE=... on the CMake command line for platform toolchains:
+#   Windows : dependencies/maplibre-native/platform/windows/custom-toolchain.cmake
+#   Android : $ANDROID_NDK/build/cmake/android.toolchain.cmake
+#   iOS/mac : handled by -DCMAKE_SYSTEM_NAME=iOS / Xcode generator
+if(WIN32)
+    set(MLN_WITH_OPENGL ON  CACHE BOOL "" FORCE)
+    set(MLN_WITH_EGL    OFF CACHE BOOL "" FORCE)
+    set(MLN_WITH_VULKAN OFF CACHE BOOL "" FORCE)
+endif()
+
+# ── maplibre-native (provides mbgl-core target) ───────────────────────────────
+add_subdirectory("${MAPLIBRE_NATIVE_DIR}" "${CMAKE_BINARY_DIR}/maplibre-native")
+
+# ── C ABI wrapper (shared on Windows/Android, static on iOS/macCatalyst) ──────
+add_subdirectory(native)
