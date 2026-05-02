@@ -571,5 +571,30 @@ public class MapLibreMapController : IMapLibreMapController
         }
         _initialized = false;
     }
+
+    // ── Camera ────────────────────────────────────────────────────────────────
+
+    public void JumpTo(double latitude, double longitude, double zoom)
+        => _map?.JumpTo(latitude, longitude, zoom, 0, 0);
+
+    // ── Input forwarding (called by MapLibreMapHandler) ───────────────────────
+
+    public void OnPointerWheelChanged(double delta, double cx, double cy)
+        => _map?.OnScroll(delta, cx, cy);
+
+    public void OnPointerPressed(double x, double y)
+        => _map?.OnPanStart(x, y);
+
+    public void OnPointerMoved(double dx, double dy)
+        => _map?.OnPanMove(dx, dy);
+
+    public void OnPointerReleased()
+        => _map?.OnPanEnd();
+
+    public void OnDoubleTapped(double x, double y)
+        => _map?.OnDoubleTap(x, y);
+
+    public void OnPinch(double scale, double cx, double cy)
+        => _map?.OnPinch(scale, cx, cy);
 }
 #endif

@@ -111,4 +111,7 @@ public interface IMapLibreMapController : IMapLibreMapOptionsSink
         string? belowLayerId = null);
     
     public void RemoveLayer(string layerId);
+
+    // Camera
+    public void JumpTo(double latitude, double longitude, double zoom);
 }

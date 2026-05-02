@@ -241,4 +241,13 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "mbgl_layer_set_layout_property",
         StringMarshalling = StringMarshalling.Utf8)]
     public static partial void LayerSetLayoutProperty(IntPtr layer, string name, string valueJson);
+
+#if ANDROID
+    // ── Android ANativeWindow helpers ──────────────────────────────────────────
+    [DllImport(Lib, EntryPoint = "mbgl_android_acquire_window")]
+    public static extern IntPtr AndroidAcquireWindow(IntPtr jniEnv, IntPtr surface);
+
+    [DllImport(Lib, EntryPoint = "mbgl_android_release_window")]
+    public static extern void AndroidReleaseWindow(IntPtr window);
+#endif
 }

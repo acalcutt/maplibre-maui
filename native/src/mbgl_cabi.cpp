@@ -427,3 +427,19 @@ void mbgl_layer_set_layout_property(mbgl_layer_t layer, const char* name, const 
 const char* mbgl_cabi_version(void) {
     return "1.0.0";
 }
+
+/* ─── Android window helpers ────────────────────────────────────────────────── */
+#ifdef __ANDROID__
+#include <android/native_window_jni.h>
+#include <jni.h>
+
+void* mbgl_android_acquire_window(void* jni_env, void* surface_jobject) {
+    return ANativeWindow_fromSurface(
+        reinterpret_cast<JNIEnv*>(jni_env),
+        reinterpret_cast<jobject>(surface_jobject));
+}
+
+void mbgl_android_release_window(void* window) {
+    ANativeWindow_release(reinterpret_cast<ANativeWindow*>(window));
+}
+#endif

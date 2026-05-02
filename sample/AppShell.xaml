@@ -7,9 +7,11 @@
     Shell.FlyoutBehavior="Disabled"
     Title="MauiSample">
 
-    <ShellContent
-        Title="Home"
-        ContentTemplate="{DataTemplate local:MainPage}"
-        Route="MainPage" />
+    <TabBar>
+        <ShellContent Title="Home"       ContentTemplate="{DataTemplate local:MainPage}"        Route="MainPage" />
+        <ShellContent Title="Basic Map"  ContentTemplate="{DataTemplate local:BasicMapPage}"    Route="BasicMapPage" />
+        <ShellContent Title="GeoJSON"    ContentTemplate="{DataTemplate local:GeoJsonLayersPage}" Route="GeoJsonLayersPage" />
+        <ShellContent Title="Markers"    ContentTemplate="{DataTemplate local:MarkersPage}"     Route="MarkersPage" />
+    </TabBar>
 
 </Shell>

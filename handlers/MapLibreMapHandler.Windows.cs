@@ -1,7 +1,11 @@
 #if WINDOWS
 using Microsoft.Maui.Handlers;
+using Microsoft.UI.Input;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using WinRT.Interop;
+using Windows.System;
 
 namespace Maui.MapLibre.Handlers;
 
@@ -10,39 +14,130 @@ public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Grid>
     private MapLibreMapController _controller = null!;
     private string _styleUrl = string.Empty;
 
+    // Input tracking
+    private bool   _isDragging;
+    private double _lastPointerX;
+    private double _lastPointerY;
+    private double _lastPinchDist;
+
     public IMapLibreMapController Controller => _controller;
 
     public MapLibreMapHandler() : base(PropertyMapper) { }
 
     protected override Grid CreatePlatformView()
     {
-        var window  = MauiContext?.Services?.GetService<Microsoft.UI.Xaml.Window>()
-                   ?? GetWindowFromApplication();
+        var window = MauiContext?.Services?.GetService<Microsoft.UI.Xaml.Window>()
+                  ?? GetWindowFromApplication();
 
-        float dpi = GetDpiForWindow(window);
-
-        var hwnd = WindowNative.GetWindowHandle(window);
+        float dpi  = GetDpiForWindow(window);
+        var   hwnd = WindowNative.GetWindowHandle(window);
 
         _controller = MapLibreMapFactory.Create(hwnd, dpi, new Dictionary<string, object>
         {
             ["styleString"] = _styleUrl
         });
 
-        _controller.OnMapReadyReceived              += VirtualView.OnMapReady;
-        _controller.OnStyleLoadedReceived           += VirtualView.OnStyleLoaded;
-        _controller.OnDidBecomeIdleReceived         += VirtualView.OnDidBecomeIdle;
+        _controller.OnMapReadyReceived               += VirtualView.OnMapReady;
+        _controller.OnStyleLoadedReceived            += VirtualView.OnStyleLoaded;
+        _controller.OnDidBecomeIdleReceived          += VirtualView.OnDidBecomeIdle;
         _controller.OnCameraMoveStartedReceived      += VirtualView.OnCameraMoveStarted;
-        _controller.OnCameraMoveReceived            += VirtualView.OnCameraMove;
-        _controller.OnCameraIdleReceived            += VirtualView.OnCameraIdle;
-        _controller.OnCameraTrackingChangedReceived += VirtualView.OnCameraTrackingChanged;
+        _controller.OnCameraMoveReceived             += VirtualView.OnCameraMove;
+        _controller.OnCameraIdleReceived             += VirtualView.OnCameraIdle;
+        _controller.OnCameraTrackingChangedReceived  += VirtualView.OnCameraTrackingChanged;
         _controller.OnCameraTrackingDismissedReceived += VirtualView.OnCameraTrackingDismissed;
-        _controller.OnMapClickReceived              += VirtualView.OnMapClick;
-        _controller.OnMapLongClickReceived          += VirtualView.OnMapLongClick;
-        _controller.OnUserLocationUpdateReceived    += VirtualView.OnUserLocationUpdate;
+        _controller.OnMapClickReceived               += VirtualView.OnMapClick;
+        _controller.OnMapLongClickReceived           += VirtualView.OnMapLongClick;
+        _controller.OnUserLocationUpdateReceived     += VirtualView.OnUserLocationUpdate;
 
         _controller.Init();
-        return _controller.View;
+
+        var view = _controller.View;
+        AttachInputEvents(view);
+        return view;
     }
+
+    // ── Input events ──────────────────────────────────────────────────────────
+
+    private void AttachInputEvents(Grid view)
+    {
+        view.PointerWheelChanged += OnPointerWheelChanged;
+        view.PointerPressed      += OnPointerPressed;
+        view.PointerMoved        += OnPointerMoved;
+        view.PointerReleased     += OnPointerReleased;
+        view.PointerCanceled     += OnPointerCanceled;
+        view.DoubleTapped        += OnDoubleTapped;
+        view.ManipulationMode     = ManipulationModes.Scale | ManipulationModes.TranslateX | ManipulationModes.TranslateY;
+        view.ManipulationDelta   += OnManipulationDelta;
+    }
+
+    private void OnPointerWheelChanged(object sender, PointerRoutedEventArgs e)
+    {
+        var pt    = e.GetCurrentPoint((UIElement)sender);
+        double delta = pt.Properties.MouseWheelDelta / 120.0; // positive = zoom in
+        double cx = pt.Position.X;
+        double cy = pt.Position.Y;
+        _controller.OnPointerWheelChanged(delta, cx, cy);
+        e.Handled = true;
+    }
+
+    private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        var el = (UIElement)sender;
+        el.CapturePointer(e.Pointer);
+        var pt = e.GetCurrentPoint(el);
+        _lastPointerX = pt.Position.X;
+        _lastPointerY = pt.Position.Y;
+        _isDragging   = true;
+        _controller.OnPointerPressed(pt.Position.X, pt.Position.Y);
+        e.Handled = true;
+    }
+
+    private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_isDragging) return;
+        var pt = e.GetCurrentPoint((UIElement)sender);
+        double dx = pt.Position.X - _lastPointerX;
+        double dy = pt.Position.Y - _lastPointerY;
+        _lastPointerX = pt.Position.X;
+        _lastPointerY = pt.Position.Y;
+        _controller.OnPointerMoved(dx, dy);
+        e.Handled = true;
+    }
+
+    private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_isDragging) return;
+        ((UIElement)sender).ReleasePointerCapture(e.Pointer);
+        _isDragging = false;
+        _controller.OnPointerReleased();
+        e.Handled = true;
+    }
+
+    private void OnPointerCanceled(object sender, PointerRoutedEventArgs e)
+    {
+        _isDragging = false;
+        _controller.OnPointerReleased();
+    }
+
+    private void OnDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        var pos = e.GetPosition((UIElement)sender);
+        _controller.OnDoubleTapped(pos.X, pos.Y);
+        e.Handled = true;
+    }
+
+    private void OnManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
+    {
+        // Pinch-to-zoom via manipulation
+        if (e.Delta.Scale != 1.0f)
+        {
+            var center = e.Position;
+            _controller.OnPinch(e.Delta.Scale, center.X, center.Y);
+        }
+        e.Handled = true;
+    }
+
+    // ── PropertyMapper update methods ─────────────────────────────────────────
 
     public void UpdateStyleUrl(string styleUrl)
     {
@@ -61,21 +156,11 @@ public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Grid>
     public void UpdateMyLocationEnabled(bool v)      => _controller.SetMyLocationEnabled(v);
     public void UpdateMyLocationTrackingMode(int v)  => _controller.SetMyLocationTrackingMode(v);
     public void UpdateMyLocationRenderMode(int v)    => _controller.SetMyLocationRenderMode(v);
-
-    public void UpdateLogoViewMargins(int x, int y)
-        => _controller.SetLogoViewMargins(x, y);
-
-    public void UpdateCompassGravity(int gravity)
-        => _controller.SetCompassGravity(gravity);
-
-    public void UpdateCompassViewMargins(int x, int y)
-        => _controller.SetCompassViewMargins(x, y);
-
-    public void UpdateAttributionButtonGravity(int gravity)
-        => _controller.SetAttributionButtonGravity(gravity);
-
-    public void UpdateAttributionButtonMargins(int x, int y)
-        => _controller.SetAttributionButtonMargins(x, y);
+    public void UpdateLogoViewMargins(int x, int y)  => _controller.SetLogoViewMargins(x, y);
+    public void UpdateCompassGravity(int gravity)    => _controller.SetCompassGravity(gravity);
+    public void UpdateCompassViewMargins(int x, int y) => _controller.SetCompassViewMargins(x, y);
+    public void UpdateAttributionButtonGravity(int gravity) => _controller.SetAttributionButtonGravity(gravity);
+    public void UpdateAttributionButtonMargins(int x, int y) => _controller.SetAttributionButtonMargins(x, y);
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -84,9 +169,7 @@ public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Grid>
             .MainWindow;
 
     private static float GetDpiForWindow(Microsoft.UI.Xaml.Window window)
-    {
-        // XamlRoot.RasterizationScale is the DPI scale (1.0 = 96 dpi)
-        return (float)(window.Content?.XamlRoot?.RasterizationScale ?? 1.0);
-    }
+        => (float)(window.Content?.XamlRoot?.RasterizationScale ?? 1.0);
 }
 #endif
+
