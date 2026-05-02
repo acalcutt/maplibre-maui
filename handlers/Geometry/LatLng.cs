@@ -19,6 +19,8 @@ public class LatLng(double latitude, double longitude)
         return new AndroidLatLng(Latitude, Longitude) ;
 #elif IOS
         return new CLLocationCoordinate2D(Latitude, Longitude);
+#else
+        return this;
 #endif
     }
 }

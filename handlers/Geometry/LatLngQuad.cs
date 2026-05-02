@@ -26,6 +26,8 @@ public class LatLngQuad(LatLng topRight, LatLng topLeft, LatLng bottomRight, Lat
         return new AndroidLatLngQuad(topLeft, topRight, bottomRight, bottomLeft);
 #elif IOS
         return CFunctions.MLNCoordinateQuadMake((CLLocationCoordinate2D)TopLeft.ToPlatform(), (CLLocationCoordinate2D)TopRight.ToPlatform(), (CLLocationCoordinate2D)BottomRight.ToPlatform(), (CLLocationCoordinate2D)BottomLeft.ToPlatform());
+#else
+        return null;
 #endif
     }
 }

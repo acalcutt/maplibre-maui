@@ -24,6 +24,8 @@ public class LatLngBounds(LatLng ne, LatLng sw)
         return bounds;
 #elif IOS
         return CFunctions.MLNCoordinateBoundsMake((CLLocationCoordinate2D)NorthEast.ToPlatform(), (CLLocationCoordinate2D)SouthWest.ToPlatform());
+#else
+        return this;
 #endif
     }
 }
