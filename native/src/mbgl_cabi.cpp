@@ -6,7 +6,6 @@
  * PlatformFrontend, which has per-platform .cpp files included via CMake.
  */
 
-#define MBGL_CABI_EXPORT
 #include "mbgl_cabi.h"
 
 #include <mbgl/map/map.hpp>

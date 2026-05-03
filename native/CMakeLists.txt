@@ -63,20 +63,18 @@ elseif(ANDROID)
         "${MAPLIBRE_NATIVE_DIR}/platform/android/src/test/number_format_test_stub.cpp"
         src/http_file_source_stub.cpp
     )
-    # Deliberately compile WITHOUT -flto.
-    # mbgl-core is compiled with -flto (via mbgl-compiler-options), so its archive
-    # members contain LLVM IR bitcode. When lld links libmbgl-cabi.so it runs LTO
-    # on those bitcode members. Hidden-visibility symbols (e.g. typeinfo for
-    # mbgl::gl::RendererBackend) that are only referenced *within* the LTO
-    # partition get internalized/renamed and then can't be found by their original
-    # mangled names.
-    # Compiling our sources WITHOUT -flto produces regular (non-LTO) object files
-    # whose external references to those typeinfos are visible to the linker
-    # *before* the LTO pass runs. lld is therefore required to emit the symbols
-    # rather than internalize them, which resolves the undefined-symbol error.
+    # MapLibre disables RTTI on Android/Linux. We must match that so polymorphic
+    # classes in mbgl_cabi.cpp don't emit typeinfo that references non-existent
+    # base class typeinfos in mbgl-core.a.
+    target_compile_options(mbgl-cabi PRIVATE
+        -fno-rtti
+    )
+
+    # LTO and size optimization matching what maplibre provides for mbgl-core
     set(_CABI_OPT "$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>")
     target_compile_options(mbgl-cabi PRIVATE
         $<${_CABI_OPT}:-Oz>
+        $<${_CABI_OPT}:-flto>
     )
     target_link_options(mbgl-cabi PRIVATE
         $<${_CABI_OPT}:-flto>
