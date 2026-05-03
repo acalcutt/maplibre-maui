@@ -396,13 +396,8 @@ int mbgl_style_has_layer(mbgl_style_t st, const char* layer_id) {
 }
 
 void mbgl_layer_set_source_layer(mbgl_layer_t layer, const char* source_layer) {
-    // Source layer is set on vector tile based layers via dynamic_cast
-    if (auto* l = dynamic_cast<mbgl::style::FillLayer*>(static_cast<mbgl::style::Layer*>(layer))) l->setSourceLayer(safe_str(source_layer));
-    else if (auto* l = dynamic_cast<mbgl::style::LineLayer*>(static_cast<mbgl::style::Layer*>(layer))) l->setSourceLayer(safe_str(source_layer));
-    else if (auto* l = dynamic_cast<mbgl::style::CircleLayer*>(static_cast<mbgl::style::Layer*>(layer))) l->setSourceLayer(safe_str(source_layer));
-    else if (auto* l = dynamic_cast<mbgl::style::SymbolLayer*>(static_cast<mbgl::style::Layer*>(layer))) l->setSourceLayer(safe_str(source_layer));
-    else if (auto* l = dynamic_cast<mbgl::style::FillExtrusionLayer*>(static_cast<mbgl::style::Layer*>(layer))) l->setSourceLayer(safe_str(source_layer));
-    else if (auto* l = dynamic_cast<mbgl::style::HeatmapLayer*>(static_cast<mbgl::style::Layer*>(layer))) l->setSourceLayer(safe_str(source_layer));
+    // mbgl::style::Layer base class has setSourceLayer() directly — no dynamic_cast needed.
+    static_cast<mbgl::style::Layer*>(layer)->setSourceLayer(safe_str(source_layer));
 }
 
 void mbgl_layer_set_filter(mbgl_layer_t layer, const char* filter_json) {

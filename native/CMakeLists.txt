@@ -21,7 +21,10 @@ endif()
 # Pass -DMBGL_STATIC=ON explicitly to force a static build (required for
 # macCatalyst where the lib is statically linked via __Internal P/Invoke).
 option(MBGL_STATIC "Build mbgl-cabi as a static library" OFF)
-if(MBGL_STATIC OR CMAKE_SYSTEM_NAME STREQUAL "iOS" OR CMAKE_SYSTEM_NAME STREQUAL "tvOS")
+# Apple platforms (iOS, macCatalyst, macOS, tvOS) always use a static lib so that
+# the MAUI app can link it via P/Invoke. Static libs don't run the linker at
+# build time, which avoids cross-DSO typeinfo visibility issues with mbgl-core.
+if(MBGL_STATIC OR APPLE)
     add_library(mbgl-cabi STATIC)
 else()
     add_library(mbgl-cabi SHARED)
@@ -69,6 +72,12 @@ elseif(ANDROID)
     )
     target_link_options(mbgl-cabi PRIVATE
         $<${_CABI_OPT}:-flto>
+        # Force lld's LTO optimizer to retain typeinfo for mbgl::gl::RendererBackend.
+        # Without this, the LTO DCE pass internalizes/eliminates the hidden-visibility
+        # typeinfo from mbgl-core, causing an undefined symbol error at link time
+        # because EGLBackend (derived class) needs it to construct its own typeinfo.
+        $<${_CABI_OPT}:-Wl,--undefined=_ZTIN4mbgl2gl15RendererBackendE>
+        $<${_CABI_OPT}:-Wl,--undefined=_ZTIN4mbgl3gfx15RendererBackendE>
     )
 elseif(APPLE)
     target_sources(mbgl-cabi PRIVATE src/platform_frontend_apple.mm)
