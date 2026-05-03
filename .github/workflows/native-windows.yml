@@ -84,5 +84,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-windows-${{ matrix.arch }}
-          path: build\Release\mbgl-cabi.dll
+          path: build/**/mbgl-cabi.dll
           retention-days: 7
