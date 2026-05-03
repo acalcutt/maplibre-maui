@@ -55,6 +55,7 @@ elseif(APPLE)
     target_sources(mbgl-cabi PRIVATE src/platform_frontend_apple.mm)
     set_source_files_properties(src/platform_frontend_apple.mm PROPERTIES
         COMPILE_FLAGS "-x objective-c++")
+    target_include_directories(mbgl-cabi PRIVATE "${MAPLIBRE_NATIVE_DIR}/src")
     # metal-cpp headers (vendored inside maplibre-native)
     target_include_directories(mbgl-cabi PRIVATE
         "${MAPLIBRE_NATIVE_DIR}/vendor/metal-cpp")
