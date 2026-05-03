@@ -63,21 +63,24 @@ elseif(ANDROID)
         "${MAPLIBRE_NATIVE_DIR}/platform/android/src/test/number_format_test_stub.cpp"
         src/http_file_source_stub.cpp
     )
-    # Match mbgl-core's LTO flags so that EGLBackend and its base-class typeinfo
-    # land in the same LTO partition and are not dead-code eliminated.
+    # Deliberately compile WITHOUT -flto.
+    # mbgl-core is compiled with -flto (via mbgl-compiler-options), so its archive
+    # members contain LLVM IR bitcode. When lld links libmbgl-cabi.so it runs LTO
+    # on those bitcode members. Hidden-visibility symbols (e.g. typeinfo for
+    # mbgl::gl::RendererBackend) that are only referenced *within* the LTO
+    # partition get internalized/renamed and then can't be found by their original
+    # mangled names.
+    # Compiling our sources WITHOUT -flto produces regular (non-LTO) object files
+    # whose external references to those typeinfos are visible to the linker
+    # *before* the LTO pass runs. lld is therefore required to emit the symbols
+    # rather than internalize them, which resolves the undefined-symbol error.
     set(_CABI_OPT "$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>")
     target_compile_options(mbgl-cabi PRIVATE
         $<${_CABI_OPT}:-Oz>
-        $<${_CABI_OPT}:-flto>
     )
     target_link_options(mbgl-cabi PRIVATE
         $<${_CABI_OPT}:-flto>
-        # Force lld's LTO optimizer to retain typeinfo for mbgl::gl::RendererBackend.
-        # Without this, the LTO DCE pass internalizes/eliminates the hidden-visibility
-        # typeinfo from mbgl-core, causing an undefined symbol error at link time
-        # because EGLBackend (derived class) needs it to construct its own typeinfo.
-        $<${_CABI_OPT}:-Wl,--undefined=_ZTIN4mbgl2gl15RendererBackendE>
-        $<${_CABI_OPT}:-Wl,--undefined=_ZTIN4mbgl3gfx15RendererBackendE>
+        $<${_CABI_OPT}:-Wl,--icf=all>
     )
 elseif(APPLE)
     target_sources(mbgl-cabi PRIVATE src/platform_frontend_apple.mm)
