@@ -3,7 +3,6 @@
  */
 #pragma once
 #include <mbgl/map/map_observer.hpp>
-#include <mbgl/gfx/rendering_stats.hpp>
 
 class NullMapObserver : public mbgl::MapObserver {
 public:
@@ -14,7 +13,7 @@ public:
     void onDidFinishLoadingMap() override {}
     void onDidFailLoadingMap(mbgl::MapLoadError, const std::string&) override {}
     void onWillStartRenderingFrame() override {}
-    void onDidFinishRenderingFrame(mbgl::MapObserver::RenderMode, bool, bool, const mbgl::gfx::RenderingStats&) override {}
+    void onDidFinishRenderingFrame(const mbgl::MapObserver::RenderFrameStatus&) override {}
     void onWillStartRenderingMap() override {}
     void onDidFinishRenderingMap(mbgl::MapObserver::RenderMode) override {}
     void onDidFinishLoadingStyle() override {}
