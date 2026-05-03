@@ -1,13 +1,45 @@
-# MapLibre MAUI
+# maplibre-maui
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](/LICENSE.md)
+[![License](https://img.shields.io/badge/License-BSD_2--Clause-blue.svg)](/LICENSE)
+[![CI](https://github.com/acalcutt/maplibre-maui/actions/workflows/ci.yml/badge.svg)](https://github.com/acalcutt/maplibre-maui/actions/workflows/ci.yml)
 
-_.NET MAUI library for creating maps
-with [MapLibre Native for Android, iOS & macOS](https://github.com/maplibre/maplibre-gl-native)._
+_.NET MAUI library for rendering interactive maps with [MapLibre Native](https://github.com/maplibre/maplibre-native) on Android, iOS, macCatalyst, and Windows._
 
-I created this project as I needed to use MapLibre for a project at work in our MAUI app that we migrated from Xamarin.
+---
 
-## Getting started
+## Architecture
+
+This library takes a **pure C ABI** approach rather than wrapping the platform-native MapLibre SDKs:
+
+```
+MapLibre Native (C++)
+       │
+       ▼
+mbgl-cabi  (C++ shared library — flat C ABI)
+       │  P/Invoke
+       ▼
+Maui.MapLibre.Native  (C# typed wrappers: MbglMap, MbglStyle, MbglFrontend …)
+       │
+       ▼
+Maui.Maplibre.Handlers  (MAUI controls, handlers, sources, layers)
+```
+
+The `mbgl-cabi` native library is compiled per-platform:
+
+| Platform | Renderer | CI |
+|---|---|---|
+| Android | OpenGL ES (EGL + ANativeWindow) | `native-android.yml` |
+| iOS / macCatalyst | Metal (MTKView) | `native-apple.yml` |
+| Windows | OpenGL (WGL) | `native-windows.yml` |
+
+MapLibre Native is included as a **git submodule** at `dependencies/maplibre-native`.
+
+---
+
+## Getting Started
+
+### Add the map to a page
+
 ```xaml
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
@@ -15,7 +47,215 @@ I created this project as I needed to use MapLibre for a project at work in our 
              xmlns:maplibre="clr-namespace:Maui.MapLibre.Handlers;assembly=Maui.Maplibre.Handlers"
              xmlns:layers="clr-namespace:Maui.MapLibre.Handlers.Layers;assembly=Maui.Maplibre.Handlers"
              xmlns:sources="clr-namespace:Maui.MapLibre.Handlers.Sources;assembly=Maui.Maplibre.Handlers"
-             x:Class="MauiSample.MainPage">
-        <maplibre:MapLibreMap MyLocationEnabled="True" StyleUrl="https://demotiles.maplibre.org/style.json"></maplibre:MapLibreMap>
+             x:Class="MyApp.MainPage">
+
+    <maplibre:MapLibreMap StyleUrl="https://demotiles.maplibre.org/style.json"
+                          MyLocationEnabled="True">
+
+        <!-- Sources and layers are declared as child elements -->
+        <sources:GeoJsonSource SourceName="my-source" FeatureCollection="{Binding GeoJson}" />
+        <layers:LineLayer SourceName="my-source"
+                          LayerName="my-line"
+                          Properties="{Binding LineProperties}" />
+    </maplibre:MapLibreMap>
+
 </ContentPage>
 ```
+
+### Register the handler in MauiProgram.cs
+
+```csharp
+using Maui.MapLibre.Handlers;
+
+public static class MauiProgram
+{
+    public static MauiApp CreateMauiApp()
+    {
+        var builder = MauiApp.CreateBuilder();
+        builder
+            .UseMaui()
+            .ConfigureMauiHandlers(handlers =>
+            {
+                handlers.AddMapLibreHandlers();
+            });
+        return builder.Build();
+    }
+}
+```
+
+---
+
+## MapLibreMap Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `StyleUrl` | `string` | MapLibre style URL or inline JSON |
+| `MinZoom` | `float` | Minimum zoom level |
+| `MaxZoom` | `float` | Maximum zoom level |
+| `MyLocationEnabled` | `bool` | Show user location dot |
+| `MyLocationTrackingMode` | `int` | Location tracking mode |
+| `MyLocationRenderMode` | `int` | Location indicator render mode |
+| `RotateGesturesEnabled` | `bool` | Enable rotation gesture |
+| `ScrollGesturesEnabled` | `bool` | Enable pan gesture |
+| `TiltGesturesEnabled` | `bool` | Enable pitch gesture |
+| `ZoomGesturesEnabled` | `bool` | Enable pinch-to-zoom |
+| `CompassEnabled` | `bool` | Show compass |
+
+### Events (as `ICommand` bindable properties)
+
+| Property | Fired when |
+|---|---|
+| `MapReadyCommand` | Native map is initialised |
+| `StyleLoadedCommand` | Style has finished loading |
+| `DidBecomeIdleCommand` | Map has finished all pending operations |
+| `CameraMoveCommand` | Camera is moving |
+| `CameraIdleCommand` | Camera has stopped |
+| `MapClickCommand` | User taps the map (`LatLng`) |
+| `MapLongClickCommand` | User long-presses the map (`LatLng`) |
+| `UserLocationUpdateCommand` | Device location has changed |
+
+---
+
+## Sources
+
+Declare sources as child elements of `MapLibreMap`, or add them programmatically via the controller.
+
+| XAML type | Description |
+|---|---|
+| `GeoJsonSource` | Inline GeoJSON `FeatureCollection` or URL |
+| `VectorSource` | Vector tile URL or TileJSON |
+| `RasterSource` | Raster tile URL or TileJSON |
+| `RasterDemSource` | Raster DEM tile source (for hillshade) |
+| `ImageSource` | Image overlay bound to `LatLngQuad` coordinates |
+
+```xaml
+<sources:GeoJsonSource SourceName="points" FeatureCollection="{Binding PointsJson}" />
+<sources:VectorSource SourceName="roads" TileUrl="https://example.com/tiles.json" />
+```
+
+---
+
+## Layers
+
+Declare layers as child elements of `MapLibreMap`. Each layer references a `SourceName` and accepts a `Properties` dictionary of [MapLibre style paint/layout properties](https://maplibre.org/maplibre-style-spec/layers/).
+
+| XAML type | MapLibre layer type |
+|---|---|
+| `FillLayer` | `fill` |
+| `LineLayer` | `line` |
+| `CircleLayer` | `circle` |
+| `SymbolLayer` | `symbol` |
+| `RasterLayer` | `raster` |
+| `HeatmapLayer` | `heatmap` |
+| `FillExtrusionLayer` | `fill-extrusion` |
+
+```xaml
+<layers:FillLayer SourceName="polygons"
+                  LayerName="polygons-fill"
+                  Properties="{Binding FillProperties}" />
+
+<layers:LineLayer SourceName="roads"
+                  LayerName="roads-line"
+                  SourceLayer="transportation"
+                  Properties="{Binding LineProperties}" />
+```
+
+### Property dictionaries
+
+Properties are a `IDictionary<string, object?>` mapping MapLibre style property names to values or expressions:
+
+```csharp
+public IDictionary<string, object?> LineProperties => new Dictionary<string, object?>
+{
+    ["line-color"] = "#e55e5e",
+    ["line-width"] = 3.0,
+};
+```
+
+---
+
+## Camera
+
+Use the controller (obtained from `MapReadyCommand` or `StyleLoadedCommand`) to manipulate the camera:
+
+```csharp
+// Instant jump
+controller.JumpTo(latitude: 51.5, longitude: -0.1, zoom: 12);
+
+// Animated ease
+controller.EaseTo(51.5, -0.1, zoom: 14, bearing: 0, pitch: 45, durationMs: 800);
+
+// Animated fly-to
+controller.FlyTo(51.5, -0.1, zoom: 14, bearing: 0, pitch: 0, durationMs: 1500);
+
+// Fit bounds with padding
+controller.SetBounds(latSw: 51.4, lonSw: -0.2, latNe: 51.6, lonNe: 0.0);
+
+// Coordinate conversion
+var (x, y) = controller.PixelForLatLng(51.5, -0.1);
+var (lat, lon) = controller.LatLngForPixel(x, y);
+```
+
+---
+
+## Feature Queries
+
+```csharp
+// Query features at a tapped screen position
+string? geojson = controller.QueryRenderedFeaturesAtPoint(x, y, layerIds: "my-layer");
+
+// Query features in a bounding box
+string? geojson = controller.QueryRenderedFeaturesInBox(x1, y1, x2, y2);
+```
+
+The return value is a GeoJSON `FeatureCollection` string, or `null` if the renderer is not ready.
+
+---
+
+## Building from Source
+
+### Prerequisites
+
+- .NET 9 SDK
+- CMake ≥ 3.21
+- **Android**: Android NDK r26+, `ANDROID_NDK` env var set
+- **Apple**: Xcode 15+, macOS host
+- **Windows**: Visual Studio 2022 with C++ workload
+
+### Clone with submodules
+
+```sh
+git clone --recurse-submodules https://github.com/acalcutt/maplibre-maui.git
+```
+
+Or if you already cloned without submodules:
+
+```sh
+git submodule update --init --recursive
+```
+
+### Build native library
+
+Each platform's CI workflow documents the exact CMake invocation. The native build output (`libmbgl-cabi.so` / `mbgl-cabi.framework` / `mbgl-cabi.dll`) must be placed under `bindings/` before packing.
+
+```sh
+# Example: Windows
+cmake -B build/windows -DCMAKE_BUILD_TYPE=Release
+cmake --build build/windows --config Release
+```
+
+### Build and run the sample
+
+```sh
+dotnet build sample/MauiSample.csproj -f net9.0-android
+```
+
+---
+
+## License
+
+BSD 2-Clause — see [LICENSE](/LICENSE).
+
+Portions copyright © 2025 Benjamin Trounson (original [maplibre-maui](https://github.com/btrounson/maplibre-maui), MIT License).
+
+This project links against [MapLibre Native](https://github.com/maplibre/maplibre-native), which is also BSD 2-Clause licensed.
