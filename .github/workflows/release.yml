@@ -99,7 +99,8 @@ jobs:
 
           echo "Native libs arranged:"
           find $N -type f
-
+      - name: Restore workloads
+        run: dotnet workload restore maplibre-maui.sln
       - name: Pack Maui.MapLibre.Native
         run: |
           dotnet pack bindings/Maui.MapLibre.Native.csproj \
