@@ -51,7 +51,7 @@ jobs:
   # ── NuGet pack (verify packability, no publish) ───────────────────────────
   pack:
     name: Pack NuGet
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     needs: [version, build-windows, build-android, build-apple]
 
     steps:
