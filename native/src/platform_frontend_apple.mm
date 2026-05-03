@@ -122,6 +122,9 @@ public:
         assumeViewport(0, 0, getResource<MetalRenderableResource>().framebufferSize());
     }
 
+    void activate() override {}
+    void deactivate() override {}
+
     /// Creates the MTKView; must be called after the backend (and its Metal
     /// device) is fully constructed. drawCallback fires inside drawInMTKView:.
     void createView(std::function<void()> drawCallback) {
@@ -255,7 +258,7 @@ private:
     // Called synchronously from drawInMTKView: (i.e. from [mtlView draw] above).
     void drawFrame() {
         if (!_pendingParams || !_renderer) return;
-        mbgl::gfx::BackendScope guard(_backend, mbgl::BackendScope::ScopeType::Implicit);
+        mbgl::gfx::BackendScope guard(_backend, mbgl::gfx::BackendScope::ScopeType::Implicit);
         _renderer->render(_pendingParams);
     }
 
