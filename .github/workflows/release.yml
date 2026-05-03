@@ -63,7 +63,7 @@ jobs:
   # ── NuGet packaging ───────────────────────────────────────────────────────
   pack:
     name: Pack NuGet
-    runs-on: macos-14
+    runs-on: macos-15
     needs: [version-check, build-windows, build-android, build-apple]
     if: needs.version-check.outputs.published == 'false'
 
