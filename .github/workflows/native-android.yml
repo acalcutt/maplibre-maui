@@ -52,5 +52,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-android-${{ matrix.abi }}
-          path: build/libmbgl-cabi.so
+          path: build/**/libmbgl-cabi.so
           retention-days: 7
