@@ -15,7 +15,7 @@ This library takes a **pure C ABI** approach rather than wrapping the platform-n
 MapLibre Native (C++)
        │
        ▼
-mbgl-cabi  (C++ shared library — flat C ABI)
+mbgl-cabi  (C++ native library — flat C ABI)
        │  P/Invoke
        ▼
 Maui.MapLibre.Native  (C# typed wrappers: MbglMap, MbglStyle, MbglFrontend …)
@@ -236,7 +236,7 @@ git submodule update --init --recursive
 
 ### Build native library
 
-Each platform's CI workflow documents the exact CMake invocation. The native build output (`libmbgl-cabi.so` / `mbgl-cabi.framework` / `mbgl-cabi.dll`) must be placed under `bindings/` before packing.
+Each platform's CI workflow documents the exact CMake invocation. The native build output (`libmbgl-cabi.so` / `libmbgl-cabi.a` / `mbgl-cabi.dll`) must be placed under `bindings/` before packing.
 
 ```sh
 # Example: Windows

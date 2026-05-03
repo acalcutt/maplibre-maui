@@ -4,10 +4,10 @@
  * All handles are opaque pointers. Thread-safety follows mbgl::Map rules:
  * RunLoop + Map must be used from the same thread.
  *
- * On each platform compile as a shared library:
+ * On each platform compile as a shared library (or static on Apple):
  *   Windows : mbgl-cabi.dll
  *   Android : libmbgl-cabi.so
- *   iOS/mac : libmbgl-cabi.dylib (or static .a)
+ *   iOS/mac : libmbgl-cabi.a
  */
 #pragma once
 
