@@ -51,6 +51,25 @@ elseif(ANDROID)
     target_sources(mbgl-cabi PRIVATE src/platform_frontend_android.cpp)
     target_link_libraries(mbgl-cabi PRIVATE EGL android log)
     target_include_directories(mbgl-cabi PRIVATE "${MAPLIBRE_NATIVE_DIR}/src")
+    # Platform stub sources — symbols normally provided by MapLibreAndroid JNI SDK
+    # that are absent in a standalone NDK build.
+    target_sources(mbgl-cabi PRIVATE
+        "${MAPLIBRE_NATIVE_DIR}/platform/default/src/mbgl/text/local_glyph_rasterizer.cpp"
+        "${MAPLIBRE_NATIVE_DIR}/platform/default/src/mbgl/util/logging_stderr.cpp"
+        "${MAPLIBRE_NATIVE_DIR}/platform/android/src/test/collator_test_stub.cpp"
+        "${MAPLIBRE_NATIVE_DIR}/platform/android/src/test/number_format_test_stub.cpp"
+        src/http_file_source_stub.cpp
+    )
+    # Match mbgl-core's LTO flags so that EGLBackend and its base-class typeinfo
+    # land in the same LTO partition and are not dead-code eliminated.
+    set(_CABI_OPT "$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>")
+    target_compile_options(mbgl-cabi PRIVATE
+        $<${_CABI_OPT}:-Oz>
+        $<${_CABI_OPT}:-flto>
+    )
+    target_link_options(mbgl-cabi PRIVATE
+        $<${_CABI_OPT}:-flto>
+    )
 elseif(APPLE)
     target_sources(mbgl-cabi PRIVATE src/platform_frontend_apple.mm)
     set_source_files_properties(src/platform_frontend_apple.mm PROPERTIES
