@@ -17,7 +17,7 @@ namespace Maui.MapLibre.Handlers;
 /// <summary>Simple container view; the MTKView rendered by the C++ backend is
 /// inserted as a subview once the frontend is initialised.</summary>
 [Register("MapContainerView")]
-internal sealed class MapContainerView : UIView
+public sealed class MapContainerView : UIView
 {
     public Action<int, int>? OnResized;
 
