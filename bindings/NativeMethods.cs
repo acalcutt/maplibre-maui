@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 namespace Maui.MapLibre.Native;
 
 /// <summary>Raw P/Invoke bindings — prefer the typed wrappers in MbglMap etc.</summary>
-internal static partial class NativeMethods
+public static partial class NativeMethods
 {
 #if IOS || MACCATALYST
     private const string Lib = "__Internal";
