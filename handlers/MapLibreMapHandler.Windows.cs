@@ -9,7 +9,7 @@ using Windows.System;
 
 namespace Maui.MapLibre.Handlers;
 
-public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Grid>
+public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Microsoft.UI.Xaml.Controls.Grid>
 {
     private MapLibreMapController _controller = null!;
     private string _styleUrl = string.Empty;
@@ -24,12 +24,11 @@ public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Grid>
 
     public MapLibreMapHandler() : base(PropertyMapper) { }
 
-    protected override Grid CreatePlatformView()
+    protected override Microsoft.UI.Xaml.Controls.Grid CreatePlatformView()
     {
-        var window = MauiContext?.Services?.GetService<Microsoft.UI.Xaml.Window>()
-                  ?? GetWindowFromApplication();
+        var window = MauiContext?.Services?.GetService<Microsoft.UI.Xaml.Window>();
 
-        float dpi  = GetDpiForWindow(window);
+        float dpi  = window != null ? GetDpiForWindow(window) : 96.0f;
         var   hwnd = WindowNative.GetWindowHandle(window);
 
         _controller = MapLibreMapFactory.Create(hwnd, dpi, new Dictionary<string, object>
@@ -58,7 +57,7 @@ public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Grid>
 
     // ── Input events ──────────────────────────────────────────────────────────
 
-    private void AttachInputEvents(Grid view)
+    private void AttachInputEvents(Microsoft.UI.Xaml.Controls.Grid view)
     {
         view.PointerWheelChanged += OnPointerWheelChanged;
         view.PointerPressed      += OnPointerPressed;
@@ -156,17 +155,14 @@ public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Grid>
     public void UpdateMyLocationEnabled(bool v)      => _controller.SetMyLocationEnabled(v);
     public void UpdateMyLocationTrackingMode(int v)  => _controller.SetMyLocationTrackingMode(v);
     public void UpdateMyLocationRenderMode(int v)    => _controller.SetMyLocationRenderMode(v);
-    public void UpdateLogoViewMargins(int x, int y)  => _controller.SetLogoViewMargins(x, y);
+    public void UpdateLogoViewMargins(int?[]? margin) { if (margin?.Length >= 2 && margin[0] != null && margin[1] != null) _controller.SetLogoViewMargins(margin[0]!.Value, margin[1]!.Value); }
     public void UpdateCompassGravity(int gravity)    => _controller.SetCompassGravity(gravity);
-    public void UpdateCompassViewMargins(int x, int y) => _controller.SetCompassViewMargins(x, y);
+    public void UpdateCompassViewMargins(int?[]? margin) { if (margin?.Length >= 2 && margin[0] != null && margin[1] != null) _controller.SetCompassViewMargins(margin[0]!.Value, margin[1]!.Value); }
     public void UpdateAttributionButtonGravity(int gravity) => _controller.SetAttributionButtonGravity(gravity);
-    public void UpdateAttributionButtonMargins(int x, int y) => _controller.SetAttributionButtonMargins(x, y);
+    public void UpdateAttributionButtonMargins(int?[]? margin) { if (margin?.Length >= 2 && margin[0] != null && margin[1] != null) _controller.SetAttributionButtonMargins(margin[0]!.Value, margin[1]!.Value); }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static Microsoft.UI.Xaml.Window GetWindowFromApplication()
-        => ((Microsoft.Maui.MauiWinUIApplication)Microsoft.UI.Xaml.Application.Current)
-            .MainWindow;
 
     private static float GetDpiForWindow(Microsoft.UI.Xaml.Window window)
         => (float)(window.Content?.XamlRoot?.RasterizationScale ?? 1.0);

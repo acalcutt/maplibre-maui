@@ -96,7 +96,7 @@ public class MapLibreMapController : IMapLibreMapController
     }
 
     private void OnSurfaceChanged(ISurfaceHolder holder,
-        Android.Graphics.Format fmt, int w, int h)
+        global::Android.Graphics.Format fmt, int w, int h)
     {
         _frontend?.SetSize(w, h);
         _map?.SetSize(w, h);
@@ -376,14 +376,14 @@ public class MapLibreMapController : IMapLibreMapController
 internal sealed class SurfaceCallback : Java.Lang.Object, ISurfaceHolderCallback
 {
     public Action<ISurfaceHolder>? Created;
-    public Action<ISurfaceHolder, Android.Graphics.Format, int, int>? Changed;
+    public Action<ISurfaceHolder, global::Android.Graphics.Format, int, int>? Changed;
     public Action<ISurfaceHolder>? Destroyed;
 
     public void SurfaceCreated(ISurfaceHolder holder)
         => Created?.Invoke(holder);
 
     public void SurfaceChanged(ISurfaceHolder holder,
-        Android.Graphics.Format format, int width, int height)
+        global::Android.Graphics.Format format, int width, int height)
         => Changed?.Invoke(holder, format, width, height);
 
     public void SurfaceDestroyed(ISurfaceHolder holder)

@@ -197,7 +197,7 @@ public class MapLibreMapController : IMapLibreMapController
     public void Init()
     {
         View.Loaded       += (_, _) => TryInitialize();
-        View.SizeChanged  += (_, e) => OnViewSizeChanged(e.NewSize);
+        View.SizeChanged  += (_, e) => OnViewSizeChanged(new Microsoft.Maui.Graphics.Size(e.NewSize.Width, e.NewSize.Height));
         View.Unloaded     += (_, _) => DisposeNative();
     }
 
@@ -464,6 +464,20 @@ public class MapLibreMapController : IMapLibreMapController
         if (!_styleReady || _style == null) return;
         var layer = _style.AddLineLayer(layerName, sourceName, belowLayerId);
         ApplyLayerMeta(layer, sourceLayer, minZoom, maxZoom);
+        ApplyProperties(layer, properties);
+    }
+
+    public void AddHeatmapLayer(
+        string layerName,
+        string sourceName,
+        IDictionary<string, object?> properties,
+        float minZoom = 0,
+        float maxZoom = 0,
+        string? belowLayerId = null)
+    {
+        if (!_styleReady || _style == null) return;
+        var layer = _style.AddHeatmapLayer(layerName, sourceName, belowLayerId);
+        ApplyLayerMeta(layer, null, minZoom, maxZoom);
         ApplyProperties(layer, properties);
     }
 
