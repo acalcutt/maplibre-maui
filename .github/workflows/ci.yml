@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ── Read version ──────────────────────────────────────────────────────────
+  version:
+    name: Read version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read VERSION
+        id: read
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+  # ── Native builds (reuse per-platform workflows) ──────────────────────────
+  build-windows:
+    name: Build Windows native
+    needs: version
+    uses: ./.github/workflows/native-windows.yml
+
+  build-android:
+    name: Build Android native
+    needs: version
+    uses: ./.github/workflows/native-android.yml
+
+  build-apple:
+    name: Build Apple native
+    needs: version
+    uses: ./.github/workflows/native-apple.yml
+
+  # ── NuGet pack (verify packability, no publish) ───────────────────────────
+  pack:
+    name: Pack NuGet
+    runs-on: ubuntu-latest
+    needs: [version, build-windows, build-android, build-apple]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 8 and 9 SDKs
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Download all native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: native-artifacts
+
+      - name: Arrange native libs for bindings project
+        run: |
+          N=bindings/native
+          mkdir -p $N/win-x64 $N/win-arm64
+          mkdir -p $N/android-arm64 $N/android-x64
+          mkdir -p $N/ios-arm64 $N/maccatalyst
+
+          cp native-artifacts/native-windows-x64/mbgl-cabi.dll        $N/win-x64/
+          cp native-artifacts/native-windows-arm64/mbgl-cabi.dll       $N/win-arm64/
+          cp native-artifacts/native-android-arm64-v8a/libmbgl-cabi.so $N/android-arm64/
+          cp native-artifacts/native-android-x86_64/libmbgl-cabi.so    $N/android-x64/
+          cp native-artifacts/native-ios-arm64/libmbgl-cabi.a          $N/ios-arm64/
+          cp native-artifacts/native-maccatalyst/libmbgl-cabi.a        $N/maccatalyst/
+
+          echo "Native libs arranged:"
+          find $N -type f
+
+      - name: Pack Maui.MapLibre.Native
+        run: |
+          dotnet pack bindings/Maui.MapLibre.Native.csproj \
+            -c Release \
+            -p:Version=${{ needs.version.outputs.version }} \
+            -p:_MbglNativeDir=$(pwd)/bindings/native/ \
+            -o artifacts/
+
+      - name: Pack Maui.Maplibre.Handlers
+        run: |
+          dotnet pack handlers/Maui.Maplibre.Handlers.csproj \
+            -c Release \
+            -p:Version=${{ needs.version.outputs.version }} \
+            -o artifacts/
+
+      - name: Upload NuGet artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages-ci
+          path: artifacts/*.nupkg
+          retention-days: 3

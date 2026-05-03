@@ -4,8 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
 permissions:
   contents: write
@@ -126,7 +124,7 @@ jobs:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
     needs: [version-check, pack]
-    if: needs.version-check.outputs.published == 'false' && github.event_name != 'pull_request'
+    if: needs.version-check.outputs.published == 'false'
     environment: release
 
     steps:
