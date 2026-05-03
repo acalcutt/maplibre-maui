@@ -112,7 +112,7 @@ public:
 
     mbgl::MapObserver& getObserver() override { return _nullObserver; }
     mbgl::Renderer* getRenderer() override { return _renderer.get(); }
-    const mbgl::TaggedScheduler& getThreadPool() const override { return _backend.getThreadPool(); }
+    const mbgl::TaggedScheduler& getThreadPool() const override { return const_cast<WGLBackend&>(_backend).getThreadPool(); }
 
 private:
     WGLBackend                                _backend;
