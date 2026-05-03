@@ -130,6 +130,47 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "mbgl_map_trigger_repaint")]
     public static partial void MapTriggerRepaint(IntPtr map);
 
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_fly_to")]
+    public static partial void MapFlyTo(IntPtr map, double lat, double lon,
+        double zoom, double bearing, double pitch, long durationMs);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_set_bounds")]
+    public static partial void MapSetBounds(IntPtr map,
+        double latSw, double lonSw, double latNe, double lonNe,
+        double minZoom, double maxZoom, double minPitch, double maxPitch);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_camera_for_bounds")]
+    public static partial void MapCameraForBounds(IntPtr map,
+        double latSw, double lonSw, double latNe, double lonNe,
+        double padTop, double padLeft, double padBottom, double padRight,
+        out double outLat, out double outLon,
+        out double outZoom, out double outBearing, out double outPitch);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_pixel_for_latlng")]
+    public static partial void MapPixelForLatLng(IntPtr map, double lat, double lon,
+        out double outX, out double outY);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_latlng_for_pixel")]
+    public static partial void MapLatLngForPixel(IntPtr map, double x, double y,
+        out double outLat, out double outLon);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_set_projection_mode")]
+    public static partial void MapSetProjectionMode(IntPtr map,
+        int axonometric, double xSkew, double ySkew);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_query_rendered_features_at_point",
+        StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr MapQueryRenderedFeaturesAtPoint(IntPtr map,
+        double x, double y, string? layerIds);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_query_rendered_features_in_box",
+        StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr MapQueryRenderedFeaturesInBox(IntPtr map,
+        double x1, double y1, double x2, double y2, string? layerIds);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_free_string")]
+    public static partial void FreeString(IntPtr str);
+
     // ── Style ─────────────────────────────────────────────────────────────────
     [LibraryImport(Lib, EntryPoint = "mbgl_map_get_style")]
     public static partial IntPtr MapGetStyle(IntPtr map);
@@ -211,6 +252,19 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "mbgl_style_add_location_indicator_layer",
         StringMarshalling = StringMarshalling.Utf8)]
     public static partial IntPtr StyleAddLocationIndicatorLayer(IntPtr style, string layerId, string? beforeLayerId);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_style_add_color_relief_layer",
+        StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr StyleAddColorReliefLayer(IntPtr style, string layerId, string sourceId, string? beforeLayerId);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_style_add_image",
+        StringMarshalling = StringMarshalling.Utf8)]
+    public static unsafe partial void StyleAddImage(IntPtr style, string imageId,
+        int width, int height, float pixelRatio, int sdf, byte* rgbaPremultiplied);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_style_remove_image",
+        StringMarshalling = StringMarshalling.Utf8)]
+    public static partial void StyleRemoveImage(IntPtr style, string imageId);
 
     [LibraryImport(Lib, EntryPoint = "mbgl_style_remove_layer",
         StringMarshalling = StringMarshalling.Utf8)]

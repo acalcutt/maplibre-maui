@@ -71,8 +71,29 @@ public sealed class MbglStyle
     public MbglLayer AddBackgroundLayer(string layerId, string? beforeLayerId = null)
         => new(NativeMethods.StyleAddBackgroundLayer(Handle, layerId, beforeLayerId));
 
+    public MbglLayer AddLocationIndicatorLayer(string layerId, string? beforeLayerId = null)
+        => new(NativeMethods.StyleAddLocationIndicatorLayer(Handle, layerId, beforeLayerId));
+
+    public MbglLayer AddColorReliefLayer(string layerId, string sourceId, string? beforeLayerId = null)
+        => new(NativeMethods.StyleAddColorReliefLayer(Handle, layerId, sourceId, beforeLayerId));
+
     public void RemoveLayer(string layerId)
         => NativeMethods.StyleRemoveLayer(Handle, layerId);
+
+    // ── Images ────────────────────────────────────────────────────────────────
+
+    /// <summary>Add a sprite image. <paramref name="rgbaPremultiplied"/> must be
+    /// width × height × 4 bytes of premultiplied RGBA.</summary>
+    public unsafe void AddImage(string imageId, int width, int height,
+                                 float pixelRatio, bool sdf,
+                                 byte[] rgbaPremultiplied)
+    {
+        fixed (byte* p = rgbaPremultiplied)
+            NativeMethods.StyleAddImage(Handle, imageId, width, height, pixelRatio, sdf ? 1 : 0, p);
+    }
+
+    public void RemoveImage(string imageId)
+        => NativeMethods.StyleRemoveImage(Handle, imageId);
 }
 
 // ── Source handle ─────────────────────────────────────────────────────────────

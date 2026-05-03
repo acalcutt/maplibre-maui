@@ -13,6 +13,8 @@
 #include <mbgl/util/size.hpp>
 #include "mbgl_cabi.h"
 
+namespace mbgl { class Renderer; }
+
 class PlatformFrontend : public mbgl::RendererFrontend {
 public:
     virtual ~PlatformFrontend() = default;
@@ -32,4 +34,7 @@ public:
     /// Returns the platform-native view created by the frontend, or nullptr.
     /// On Apple this is the MTKView*; on other platforms returns nullptr.
     virtual void* getNativeView() { return nullptr; }
+
+    /// Returns the underlying Renderer for feature queries, or nullptr.
+    virtual mbgl::Renderer* getRenderer() { return nullptr; }
 };

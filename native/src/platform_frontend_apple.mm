@@ -247,6 +247,7 @@ public:
 
     mbgl::Size getSize() const override { return _backend.size; }
     mbgl::MapObserver& getObserver() override { return _nullObserver; }
+    mbgl::Renderer* getRenderer() override { return _renderer.get(); }
 
     void* getNativeView() override { return _backend.getNativeView(); }
 

@@ -112,6 +112,7 @@ public:
     mbgl::Size getSize() const override { return _backend.getSize(); }
 
     mbgl::MapObserver& getObserver() override { return _nullObserver; }
+    mbgl::Renderer* getRenderer() override { return _renderer.get(); }
 
 private:
     WGLBackend                                _backend;

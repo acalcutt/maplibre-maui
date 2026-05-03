@@ -92,6 +92,73 @@ MBGL_CABI_API void            mbgl_map_on_pan_end(mbgl_map_t map);
 MBGL_CABI_API void            mbgl_map_on_pinch(mbgl_map_t map, double scale_factor,
                                                 double cx, double cy);
 
+/* ── Map – additional camera / bounds / projection ─────────────────────────── */
+MBGL_CABI_API void            mbgl_map_fly_to(mbgl_map_t map, double lat, double lon,
+                                              double zoom, double bearing, double pitch,
+                                              int64_t duration_ms);
+
+/** Set geographic camera bounds and optional zoom/pitch limits.
+ *  Pass NaN for any field to leave it unset (e.g. no lat/lng constraint). */
+MBGL_CABI_API void            mbgl_map_set_bounds(mbgl_map_t map,
+                                                   double lat_sw, double lon_sw,
+                                                   double lat_ne, double lon_ne,
+                                                   double min_zoom, double max_zoom,
+                                                   double min_pitch, double max_pitch);
+
+/** Compute CameraOptions that fits the given LatLngBounds with optional padding.
+ *  Padding order: top, left, bottom, right (matches mbgl::EdgeInsets field order). */
+MBGL_CABI_API void            mbgl_map_camera_for_bounds(mbgl_map_t map,
+                                                          double lat_sw, double lon_sw,
+                                                          double lat_ne, double lon_ne,
+                                                          double pad_top, double pad_left,
+                                                          double pad_bottom, double pad_right,
+                                                          double* out_lat, double* out_lon,
+                                                          double* out_zoom, double* out_bearing,
+                                                          double* out_pitch);
+
+MBGL_CABI_API void            mbgl_map_pixel_for_latlng(mbgl_map_t map,
+                                                         double lat, double lon,
+                                                         double* out_x, double* out_y);
+MBGL_CABI_API void            mbgl_map_latlng_for_pixel(mbgl_map_t map,
+                                                         double x, double y,
+                                                         double* out_lat, double* out_lon);
+
+MBGL_CABI_API void            mbgl_map_set_projection_mode(mbgl_map_t map,
+                                                            int axonometric,
+                                                            double x_skew, double y_skew);
+
+/* ── Style – images ─────────────────────────────────────────────────────────── */
+/** Add a sprite image from premultiplied RGBA bytes (length = width * height * 4). */
+MBGL_CABI_API void            mbgl_style_add_image(mbgl_style_t st, const char* image_id,
+                                                    int width, int height,
+                                                    float pixel_ratio, int sdf,
+                                                    const uint8_t* rgba_premultiplied);
+MBGL_CABI_API void            mbgl_style_remove_image(mbgl_style_t st, const char* image_id);
+
+/* ── Style – additional layer types ─────────────────────────────────────────── */
+MBGL_CABI_API mbgl_layer_t    mbgl_style_add_location_indicator_layer(mbgl_style_t st,
+                                                                        const char* id,
+                                                                        const char* before);
+MBGL_CABI_API mbgl_layer_t    mbgl_style_add_color_relief_layer(mbgl_style_t st,
+                                                                  const char* id,
+                                                                  const char* src,
+                                                                  const char* before);
+
+/* ── Feature queries ────────────────────────────────────────────────────────── */
+/** Query rendered features at a screen point.
+ *  Returns a JSON FeatureCollection string; caller must free with mbgl_free_string().
+ *  @param layer_ids  Comma-separated layer IDs to restrict the query, or NULL for all. */
+MBGL_CABI_API char*           mbgl_map_query_rendered_features_at_point(mbgl_map_t map,
+                                                                          double x, double y,
+                                                                          const char* layer_ids);
+/** Query rendered features in a screen bounding box. */
+MBGL_CABI_API char*           mbgl_map_query_rendered_features_in_box(mbgl_map_t map,
+                                                                        double x1, double y1,
+                                                                        double x2, double y2,
+                                                                        const char* layer_ids);
+/** Free a string returned by any mbgl query function. */
+MBGL_CABI_API void            mbgl_free_string(char* str);
+
 /* ── Style ─────────────────────────────────────────────────────────────────── */
 MBGL_CABI_API mbgl_style_t    mbgl_map_get_style(mbgl_map_t map);
 

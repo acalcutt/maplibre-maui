@@ -53,6 +53,69 @@ public sealed class MbglMap : IDisposable
     public void EaseTo(double lat, double lon, double zoom, double bearing, double pitch, long durationMs)
         => NativeMethods.MapEaseTo(Handle, lat, lon, zoom, bearing, pitch, durationMs);
 
+    public void FlyTo(double lat, double lon, double zoom, double bearing, double pitch, long durationMs)
+        => NativeMethods.MapFlyTo(Handle, lat, lon, zoom, bearing, pitch, durationMs);
+
+    /// <summary>Set geographic constraints and zoom/pitch limits.
+    /// Pass <see cref="double.NaN"/> for any parameter to leave it unconstrained.</summary>
+    public void SetBounds(double latSw = double.NaN, double lonSw = double.NaN,
+                          double latNe = double.NaN, double lonNe = double.NaN,
+                          double minZoom = double.NaN, double maxZoom = double.NaN,
+                          double minPitch = double.NaN, double maxPitch = double.NaN)
+        => NativeMethods.MapSetBounds(Handle, latSw, lonSw, latNe, lonNe,
+                                      minZoom, maxZoom, minPitch, maxPitch);
+
+    /// <summary>Returns the CameraOptions (lat, lon, zoom, bearing, pitch) that fits the
+    /// given bounds with optional screen padding (top, left, bottom, right in pixels).</summary>
+    public (double Lat, double Lon, double Zoom, double Bearing, double Pitch)
+        CameraForBounds(double latSw, double lonSw, double latNe, double lonNe,
+                        double padTop = 0, double padLeft = 0,
+                        double padBottom = 0, double padRight = 0)
+    {
+        NativeMethods.MapCameraForBounds(Handle, latSw, lonSw, latNe, lonNe,
+            padTop, padLeft, padBottom, padRight,
+            out var lat, out var lon, out var zoom, out var bearing, out var pitch);
+        return (lat, lon, zoom, bearing, pitch);
+    }
+
+    public (double X, double Y) PixelForLatLng(double lat, double lon)
+    {
+        NativeMethods.MapPixelForLatLng(Handle, lat, lon, out var x, out var y);
+        return (x, y);
+    }
+
+    public (double Lat, double Lon) LatLngForPixel(double x, double y)
+    {
+        NativeMethods.MapLatLngForPixel(Handle, x, y, out var lat, out var lon);
+        return (lat, lon);
+    }
+
+    public void SetProjectionMode(bool axonometric = false, double xSkew = 0.0, double ySkew = 1.0)
+        => NativeMethods.MapSetProjectionMode(Handle, axonometric ? 1 : 0, xSkew, ySkew);
+
+    /// <summary>Query rendered features at a screen point. Returns a GeoJSON FeatureCollection string,
+    /// or null if the renderer is not ready.</summary>
+    /// <param name="layerIds">Optional comma-separated layer IDs to restrict the query.</param>
+    public string? QueryRenderedFeaturesAtPoint(double x, double y, string? layerIds = null)
+    {
+        var ptr = NativeMethods.MapQueryRenderedFeaturesAtPoint(Handle, x, y, layerIds);
+        if (ptr == IntPtr.Zero) return null;
+        var result = Marshal.PtrToStringUTF8(ptr);
+        NativeMethods.FreeString(ptr);
+        return result;
+    }
+
+    /// <summary>Query rendered features in a screen bounding box.</summary>
+    public string? QueryRenderedFeaturesInBox(double x1, double y1, double x2, double y2,
+                                               string? layerIds = null)
+    {
+        var ptr = NativeMethods.MapQueryRenderedFeaturesInBox(Handle, x1, y1, x2, y2, layerIds);
+        if (ptr == IntPtr.Zero) return null;
+        var result = Marshal.PtrToStringUTF8(ptr);
+        NativeMethods.FreeString(ptr);
+        return result;
+    }
+
     public double Zoom    => NativeMethods.MapGetZoom(Handle);
     public double Bearing => NativeMethods.MapGetBearing(Handle);
     public double Pitch   => NativeMethods.MapGetPitch(Handle);

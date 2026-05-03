@@ -30,13 +30,20 @@
 #include <mbgl/style/layers/fill_extrusion_layer.hpp>
 #include <mbgl/style/layers/background_layer.hpp>
 #include <mbgl/style/layers/location_indicator_layer.hpp>
+#include <mbgl/style/layers/color_relief_layer.hpp>
 #include <mbgl/style/conversion/geojson.hpp>
 #include <mbgl/style/conversion/filter.hpp>
 #include <mbgl/map/map_observer.hpp>
+#include <mbgl/style/image.hpp>
+#include <mbgl/util/image.hpp>
+#include <mbgl/renderer/renderer.hpp>
+#include <mbgl/util/geojson.hpp>
 
 #include <memory>
 #include <string>
 #include <stdexcept>
+#include <cmath>
+#include <sstream>
 
 // Platform frontend is provided separately per platform.
 #include "platform_frontend.hpp"
@@ -251,15 +258,7 @@ void mbgl_map_on_pan_start(mbgl_map_t map, double x, double y) {
 }
 
 void mbgl_map_on_pan_move(mbgl_map_t map, double dx, double dy) {
-    auto* m = static_cast<CabiMap*>(map);
-    // Convert pixel delta to lat/lng using current zoom
-    mbgl::CameraOptions cam = s_panStart;
-    // latLngForPixel is not public in mbgl — use flyTo with anchor trick
-    // Simple approach: adjust bearing/pitch is zero, offset center by pixel delta
-    // MapLibre exposes setLatLngAtPoint only in the legacy GL JS sense;
-    // use the TransformState-based approach via flyTo
-    (void)dx; (void)dy; // TODO: implement via mbgl::Transform when API stabilizes
-    m->map->jumpTo(cam);
+    static_cast<CabiMap*>(map)->map->moveBy(mbgl::ScreenCoordinate{dx, dy});
 }
 
 void mbgl_map_on_pan_end(mbgl_map_t /*map*/) {}
@@ -432,6 +431,157 @@ void mbgl_layer_set_layout_property(mbgl_layer_t layer, const char* name, const 
     auto* l = static_cast<mbgl::style::Layer*>(layer);
     mbgl::style::conversion::Error err;
     l->setLayoutProperty(safe_str(name), mbgl::JSDocument::parse(safe_str(value_json)), err);
+}
+
+/* ─── Map – additional camera / bounds / projection ─────────────────────────── */
+
+void mbgl_map_fly_to(mbgl_map_t map, double lat, double lon,
+                     double zoom, double bearing, double pitch,
+                     int64_t duration_ms) {
+    mbgl::CameraOptions cam;
+    cam.center  = mbgl::LatLng{ lat, lon };
+    cam.zoom    = zoom;
+    cam.bearing = bearing;
+    cam.pitch   = pitch;
+    mbgl::AnimationOptions anim{ mbgl::Duration(std::chrono::milliseconds(duration_ms)) };
+    static_cast<CabiMap*>(map)->map->flyTo(cam, anim);
+}
+
+void mbgl_map_set_bounds(mbgl_map_t map,
+                          double lat_sw, double lon_sw,
+                          double lat_ne, double lon_ne,
+                          double min_zoom, double max_zoom,
+                          double min_pitch, double max_pitch) {
+    mbgl::BoundOptions opts;
+    if (!std::isnan(lat_sw) && !std::isnan(lon_sw) &&
+        !std::isnan(lat_ne) && !std::isnan(lon_ne)) {
+        opts.withLatLngBounds(mbgl::LatLngBounds::hull(
+            mbgl::LatLng{ lat_sw, lon_sw }, mbgl::LatLng{ lat_ne, lon_ne }));
+    }
+    if (!std::isnan(min_zoom))  opts.withMinZoom(min_zoom);
+    if (!std::isnan(max_zoom))  opts.withMaxZoom(max_zoom);
+    if (!std::isnan(min_pitch)) opts.withMinPitch(min_pitch);
+    if (!std::isnan(max_pitch)) opts.withMaxPitch(max_pitch);
+    static_cast<CabiMap*>(map)->map->setBounds(opts);
+}
+
+void mbgl_map_camera_for_bounds(mbgl_map_t map,
+                                  double lat_sw, double lon_sw,
+                                  double lat_ne, double lon_ne,
+                                  double pad_top,    double pad_left,
+                                  double pad_bottom, double pad_right,
+                                  double* out_lat, double* out_lon,
+                                  double* out_zoom, double* out_bearing,
+                                  double* out_pitch) {
+    auto bounds  = mbgl::LatLngBounds::hull(mbgl::LatLng{ lat_sw, lon_sw },
+                                            mbgl::LatLng{ lat_ne, lon_ne });
+    mbgl::EdgeInsets padding{ pad_top, pad_left, pad_bottom, pad_right };
+    auto cam = static_cast<CabiMap*>(map)->map->cameraForLatLngBounds(bounds, padding);
+    *out_lat     = cam.center  ? cam.center->latitude()  : 0.0;
+    *out_lon     = cam.center  ? cam.center->longitude() : 0.0;
+    *out_zoom    = cam.zoom    ? *cam.zoom    : 0.0;
+    *out_bearing = cam.bearing ? *cam.bearing : 0.0;
+    *out_pitch   = cam.pitch   ? *cam.pitch   : 0.0;
+}
+
+void mbgl_map_pixel_for_latlng(mbgl_map_t map, double lat, double lon,
+                                double* out_x, double* out_y) {
+    auto sc = static_cast<CabiMap*>(map)->map->pixelForLatLng(mbgl::LatLng{ lat, lon });
+    *out_x = sc.x;
+    *out_y = sc.y;
+}
+
+void mbgl_map_latlng_for_pixel(mbgl_map_t map, double x, double y,
+                                double* out_lat, double* out_lon) {
+    auto ll = static_cast<CabiMap*>(map)->map->latLngForPixel(mbgl::ScreenCoordinate{ x, y });
+    *out_lat = ll.latitude();
+    *out_lon = ll.longitude();
+}
+
+void mbgl_map_set_projection_mode(mbgl_map_t map, int axonometric,
+                                   double x_skew, double y_skew) {
+    mbgl::ProjectionMode mode;
+    mode.axonometric = (axonometric != 0);
+    mode.xSkew = x_skew;
+    mode.ySkew = y_skew;
+    static_cast<CabiMap*>(map)->map->setProjectionMode(mode);
+}
+
+/* ─── Style – images ────────────────────────────────────────────────────────── */
+
+void mbgl_style_add_image(mbgl_style_t st, const char* image_id,
+                           int width, int height, float pixel_ratio,
+                           int sdf, const uint8_t* rgba_premultiplied) {
+    mbgl::PremultipliedImage img(
+        { static_cast<uint32_t>(width), static_cast<uint32_t>(height) },
+        rgba_premultiplied,
+        static_cast<size_t>(width) * static_cast<size_t>(height) * 4u);
+    style_ref(st).addImage(std::make_unique<mbgl::style::Image>(
+        safe_str(image_id), std::move(img), pixel_ratio, sdf != 0));
+}
+
+void mbgl_style_remove_image(mbgl_style_t st, const char* image_id) {
+    style_ref(st).removeImage(safe_str(image_id));
+}
+
+/* ─── Layers – additional types ─────────────────────────────────────────────── */
+
+mbgl_layer_t mbgl_style_add_color_relief_layer(mbgl_style_t st, const char* id,
+                                                const char* src, const char* before) {
+    return add_layer<mbgl::style::ColorReliefLayer>(st, id, src, before);
+}
+
+/* ─── Feature queries ────────────────────────────────────────────────────────── */
+
+static std::vector<std::string> split_layer_ids(const char* csv) {
+    std::vector<std::string> result;
+    if (!csv || !*csv) return result;
+    std::istringstream ss(csv);
+    std::string token;
+    while (std::getline(ss, token, ',')) {
+        if (!token.empty()) result.push_back(std::move(token));
+    }
+    return result;
+}
+
+static char* features_to_json(std::vector<mbgl::Feature>&& features) {
+    mbgl::FeatureCollection fc(features.begin(), features.end());
+    std::string json = mapbox::geojson::stringify(mbgl::GeoJSON{ fc });
+    char* result = new char[json.size() + 1];
+    std::copy(json.begin(), json.end(), result);
+    result[json.size()] = '\0';
+    return result;
+}
+
+char* mbgl_map_query_rendered_features_at_point(mbgl_map_t map, double x, double y,
+                                                  const char* layer_ids) {
+    auto* m        = static_cast<CabiMap*>(map);
+    auto* renderer = m->frontend->getRenderer();
+    if (!renderer) return nullptr;
+    mbgl::RenderedQueryOptions opts;
+    auto ids = split_layer_ids(layer_ids);
+    if (!ids.empty()) opts.layerIDs = ids;
+    auto features = renderer->queryRenderedFeatures(mbgl::ScreenCoordinate{ x, y }, opts);
+    return features_to_json(std::move(features));
+}
+
+char* mbgl_map_query_rendered_features_in_box(mbgl_map_t map,
+                                               double x1, double y1,
+                                               double x2, double y2,
+                                               const char* layer_ids) {
+    auto* m        = static_cast<CabiMap*>(map);
+    auto* renderer = m->frontend->getRenderer();
+    if (!renderer) return nullptr;
+    mbgl::RenderedQueryOptions opts;
+    auto ids = split_layer_ids(layer_ids);
+    if (!ids.empty()) opts.layerIDs = ids;
+    mbgl::ScreenBox box{ { x1, y1 }, { x2, y2 } };
+    auto features = renderer->queryRenderedFeatures(box, opts);
+    return features_to_json(std::move(features));
+}
+
+void mbgl_free_string(char* str) {
+    delete[] str;
 }
 
 /* ─── Version ───────────────────────────────────────────────────────────────── */
