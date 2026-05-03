@@ -203,7 +203,7 @@ public:
     }
 
     ~MetalFrontend() override {
-        mbgl::BackendScope guard(_backend, mbgl::BackendScope::ScopeType::Implicit);
+        mbgl::gfx::BackendScope guard(_backend, mbgl::gfx::BackendScope::ScopeType::Implicit);
         _renderer.reset();
     }
 

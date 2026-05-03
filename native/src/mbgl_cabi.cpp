@@ -33,6 +33,8 @@
 #include <mbgl/style/layers/color_relief_layer.hpp>
 #include <mbgl/style/conversion/geojson.hpp>
 #include <mbgl/style/conversion/filter.hpp>
+#include <mbgl/util/rapidjson.hpp>
+#include <mbgl/style/rapidjson_conversion.hpp>
 #include <mbgl/map/map_observer.hpp>
 #include <mbgl/style/image.hpp>
 #include <mbgl/util/image.hpp>
@@ -218,13 +220,13 @@ double mbgl_map_get_pitch(mbgl_map_t map) {
 }
 
 void mbgl_map_get_center(mbgl_map_t map, double* out_lat, double* out_lon) {
-    auto& cam = static_cast<CabiMap*>(map)->map->getCameraOptions();
+    auto cam = static_cast<CabiMap*>(map)->map->getCameraOptions();
     if (cam.center) { *out_lat = cam.center->latitude(); *out_lon = cam.center->longitude(); }
     else            { *out_lat = 0.0; *out_lon = 0.0; }
 }
 
-void mbgl_map_set_min_zoom(mbgl_map_t map, double zoom) { static_cast<CabiMap*>(map)->map->setMinZoom(zoom); }
-void mbgl_map_set_max_zoom(mbgl_map_t map, double zoom) { static_cast<CabiMap*>(map)->map->setMaxZoom(zoom); }
+void mbgl_map_set_min_zoom(mbgl_map_t map, double zoom) { static_cast<CabiMap*>(map)->map->setBounds(mbgl::BoundOptions{}.withMinZoom(zoom)); }
+void mbgl_map_set_max_zoom(mbgl_map_t map, double zoom) { static_cast<CabiMap*>(map)->map->setBounds(mbgl::BoundOptions{}.withMaxZoom(zoom)); }
 
 void mbgl_map_trigger_repaint(mbgl_map_t map) { static_cast<CabiMap*>(map)->map->triggerRepaint(); }
 
@@ -301,7 +303,9 @@ mbgl_source_t mbgl_style_add_geojson_source_url(mbgl_style_t st, const char* sou
 
 void mbgl_geojson_source_set_data(mbgl_source_t src, const char* geojson) {
     auto* gs = static_cast<mbgl::style::GeoJSONSource*>(src);
-    gs->setGeoJSON(mbgl::style::conversion::parseGeoJSON(safe_str(geojson)).value());
+    mbgl::style::conversion::Error err;
+    auto result = mbgl::style::conversion::parseGeoJSON(safe_str(geojson), err);
+    if (result) gs->setGeoJSON(*result);
 }
 
 void mbgl_geojson_source_set_url(mbgl_source_t src, const char* url) {
@@ -403,8 +407,11 @@ void mbgl_layer_set_source_layer(mbgl_layer_t layer, const char* source_layer) {
 
 void mbgl_layer_set_filter(mbgl_layer_t layer, const char* filter_json) {
     auto* l = static_cast<mbgl::style::Layer*>(layer);
+    mbgl::JSDocument doc;
+    doc.Parse(filter_json);
+    if (doc.HasParseError()) return;
     mbgl::style::conversion::Error err;
-    auto filter = mbgl::style::conversion::convertJSON<mbgl::style::Filter>(safe_str(filter_json), err);
+    auto filter = mbgl::style::conversion::convert<mbgl::style::Filter>(doc, err);
     if (filter) l->setFilter(*filter);
 }
 
@@ -423,14 +430,20 @@ void mbgl_layer_set_visibility(mbgl_layer_t layer, int visible) {
 
 void mbgl_layer_set_paint_property(mbgl_layer_t layer, const char* name, const char* value_json) {
     auto* l = static_cast<mbgl::style::Layer*>(layer);
-    mbgl::style::conversion::Error err;
-    l->setPaintProperty(safe_str(name), mbgl::JSDocument::parse(safe_str(value_json)), err);
+    mbgl::JSDocument doc;
+    doc.Parse(value_json);
+    if (doc.HasParseError()) return;
+    const mbgl::JSValue& v = doc;
+    l->setProperty(safe_str(name), mbgl::style::conversion::Convertible(&v));
 }
 
 void mbgl_layer_set_layout_property(mbgl_layer_t layer, const char* name, const char* value_json) {
     auto* l = static_cast<mbgl::style::Layer*>(layer);
-    mbgl::style::conversion::Error err;
-    l->setLayoutProperty(safe_str(name), mbgl::JSDocument::parse(safe_str(value_json)), err);
+    mbgl::JSDocument doc;
+    doc.Parse(value_json);
+    if (doc.HasParseError()) return;
+    const mbgl::JSValue& v = doc;
+    l->setProperty(safe_str(name), mbgl::style::conversion::Convertible(&v));
 }
 
 /* ─── Map – additional camera / bounds / projection ─────────────────────────── */

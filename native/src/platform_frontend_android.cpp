@@ -68,8 +68,7 @@ protected:
     mbgl::gl::ProcAddress getExtensionFunctionPointer(const char* name) override {
         return reinterpret_cast<mbgl::gl::ProcAddress>(eglGetProcAddress(name));
     }
-    std::vector<const char*> getInstanceExtensions() const override { return {}; }
-    std::vector<const char*> getDeviceExtensions()   const override { return {}; }
+    void updateAssumedState() override {}
 
 private:
     EGLDisplay _display = EGL_NO_DISPLAY;
@@ -94,7 +93,7 @@ public:
     {}
 
     ~EGLFrontend() override {
-        mbgl::BackendScope guard(_backend, mbgl::BackendScope::ScopeType::Implicit);
+        mbgl::gfx::BackendScope guard(_backend, mbgl::gfx::BackendScope::ScopeType::Implicit);
         _renderer.reset();
     }
 
@@ -119,8 +118,8 @@ public:
             params = std::move(_updateParams);
         }
         if (!params) return;
-        mbgl::BackendScope guard(_backend, mbgl::BackendScope::ScopeType::Implicit);
-        _renderer->render(*params);
+        mbgl::gfx::BackendScope guard(_backend, mbgl::gfx::BackendScope::ScopeType::Implicit);
+        _renderer->render(params);
         _backend.swapBuffers();
     }
 
