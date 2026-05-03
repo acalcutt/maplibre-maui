@@ -25,7 +25,7 @@ jobs:
             cmake-system: Darwin
             cmake-sysroot: macosx
             cmake-archs: "x86_64;arm64"
-            extra-flags: -DCMAKE_XCODE_ATTRIBUTE_SUPPORTS_MACCATALYST=YES
+            extra-flags: -DCMAKE_XCODE_ATTRIBUTE_SUPPORTS_MACCATALYST=YES -DMLN_WITH_GLFW=OFF
             artifact: native-maccatalyst
 
     steps:

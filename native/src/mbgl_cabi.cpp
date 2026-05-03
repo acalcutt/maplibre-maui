@@ -42,6 +42,15 @@
 // Platform frontend is provided separately per platform.
 #include "platform_frontend.hpp"
 
+/// Factory function defined in platform_frontend_<platform>.cpp/.mm
+extern PlatformFrontend* createPlatformFrontend(
+    void*          surface_handle,
+    void*          gl_context,
+    mbgl::Size     size,
+    float          pixel_ratio,
+    mbgl_render_fn render_callback,
+    void*          render_userdata);
+
 /* ─── Internal structs ──────────────────────────────────────────────────────── */
 
 struct CabiRunLoop {
@@ -85,13 +94,12 @@ mbgl_frontend_t mbgl_frontend_create_gl(
     mbgl_render_fn render_callback,
     void*  render_userdata)
 {
-    auto* fe = new PlatformFrontend(
+    return createPlatformFrontend(
         surface_handle, gl_context,
         mbgl::Size{ static_cast<uint32_t>(width_px), static_cast<uint32_t>(height_px) },
         pixel_ratio,
         render_callback, render_userdata
     );
-    return fe;
 }
 
 void mbgl_frontend_destroy(mbgl_frontend_t fe) {
@@ -105,6 +113,10 @@ void mbgl_frontend_render(mbgl_frontend_t fe) {
 void mbgl_frontend_set_size(mbgl_frontend_t fe, int width_px, int height_px) {
     static_cast<PlatformFrontend*>(fe)->setSize(
         mbgl::Size{ static_cast<uint32_t>(width_px), static_cast<uint32_t>(height_px) });
+}
+
+void* mbgl_frontend_get_native_view(mbgl_frontend_t fe) {
+    return static_cast<PlatformFrontend*>(fe)->getNativeView();
 }
 
 /* ─── Map ───────────────────────────────────────────────────────────────────── */

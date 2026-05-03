@@ -52,6 +52,7 @@ MBGL_CABI_API mbgl_frontend_t mbgl_frontend_create_gl(
 MBGL_CABI_API void            mbgl_frontend_destroy(mbgl_frontend_t fe);
 MBGL_CABI_API void            mbgl_frontend_render(mbgl_frontend_t fe);
 MBGL_CABI_API void            mbgl_frontend_set_size(mbgl_frontend_t fe, int width_px, int height_px);
+MBGL_CABI_API void*           mbgl_frontend_get_native_view(mbgl_frontend_t fe);
 
 /* ── Map ───────────────────────────────────────────────────────────────────── */
 MBGL_CABI_API mbgl_map_t      mbgl_map_create(

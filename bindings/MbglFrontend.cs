@@ -49,6 +49,12 @@ public sealed class MbglFrontend : IDisposable
     public void SetSize(int widthPx, int heightPx)
         => NativeMethods.FrontendSetSize(Handle, widthPx, heightPx);
 
+    /// <summary>
+    /// Returns the platform-native view created by the frontend, or <see cref="IntPtr.Zero"/>.
+    /// On Apple platforms this is the <c>MTKView*</c>; cast to <c>UIView</c> and add as subview.
+    /// </summary>
+    public IntPtr GetNativeView() => NativeMethods.FrontendGetNativeView(Handle);
+
     public void Dispose()
     {
         if (Handle != IntPtr.Zero)

@@ -56,6 +56,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "mbgl_frontend_set_size")]
     public static partial void FrontendSetSize(IntPtr fe, int widthPx, int heightPx);
 
+    [LibraryImport(Lib, EntryPoint = "mbgl_frontend_get_native_view")]
+    public static partial IntPtr FrontendGetNativeView(IntPtr fe);
+
     // ── Map ───────────────────────────────────────────────────────────────────
     [LibraryImport(Lib, EntryPoint = "mbgl_map_create",
         StringMarshalling = StringMarshalling.Utf8)]

@@ -27,4 +27,8 @@ public:
 
     /// Returns a default (no-op) MapObserver.
     virtual mbgl::MapObserver& getObserver() = 0;
+
+    /// Returns the platform-native view created by the frontend, or nullptr.
+    /// On Apple this is the MTKView*; on other platforms returns nullptr.
+    virtual void* getNativeView() { return nullptr; }
 };

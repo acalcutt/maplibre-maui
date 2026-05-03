@@ -1,5 +1,4 @@
 #if IOS || MACCATALYST
-using CoreAnimation;
 using CoreGraphics;
 using Foundation;
 using ObjCRuntime;
@@ -13,26 +12,24 @@ using Location = Microsoft.Maui.Devices.Sensors.Location;
 
 namespace Maui.MapLibre.Handlers;
 
-// -- Metal-backed UIView -------------------------------------------------------
+// -- Container UIView --------------------------------------------------------
 
-/// <summary>UIView whose backing layer is a CAMetalLayer.</summary>
-[Register("MetalMapView")]
-internal sealed class MetalMapView : UIView
+/// <summary>Simple container view; the MTKView rendered by the C++ backend is
+/// inserted as a subview once the frontend is initialised.</summary>
+[Register("MapContainerView")]
+internal sealed class MapContainerView : UIView
 {
-    [Export("layerClass")]
-    public static Class LayerClass() => new Class(typeof(CAMetalLayer));
-
-    public CAMetalLayer MetalLayer => (CAMetalLayer)Layer;
-
     public Action<int, int>? OnResized;
 
     public override void LayoutSubviews()
     {
         base.LayoutSubviews();
-        var scale = UIScreen.MainScreen.Scale;
-        MetalLayer.Frame = Bounds;
-        MetalLayer.DrawableSize = new CGSize(Bounds.Width * scale, Bounds.Height * scale);
 
+        // Keep any MTKView subview filling the container.
+        foreach (var sv in Subviews)
+            sv.Frame = Bounds;
+
+        var scale = UIScreen.MainScreen.Scale;
         int w = Math.Max(1, (int)(Bounds.Width  * scale));
         int h = Math.Max(1, (int)(Bounds.Height * scale));
         OnResized?.Invoke(w, h);
@@ -43,7 +40,8 @@ internal sealed class MetalMapView : UIView
 
 /// <summary>
 /// iOS / Mac Catalyst IMapLibreMapController backed by mbgl-cabi (Metal frontend).
-/// Platform view is a MetalMapView; the C++ Metal backend renders via CAMetalLayer.
+/// Platform view is a plain container UIView; the C++ Metal backend owns an MTKView
+/// which is retrieved via GetNativeView() and added as a subview on first layout.
 /// </summary>
 public class MapLibreMapController : IMapLibreMapController
 {
@@ -76,7 +74,7 @@ public class MapLibreMapController : IMapLibreMapController
     private MbglStyle?    _style;
     private bool          _styleReady;
 
-    public MetalMapView View { get; }
+    public MapContainerView View { get; }
 
     // -- Events ----------------------------------------------------------------
 
@@ -99,7 +97,7 @@ public class MapLibreMapController : IMapLibreMapController
         _pixelRatio  = pixelRatio;
         _styleString = styleString;
 
-        View = new MetalMapView { OnResized = OnViewResized };
+        View = new MapContainerView { OnResized = OnViewResized };
     }
 
     // -- View size -------------------------------------------------------------
@@ -121,11 +119,20 @@ public class MapLibreMapController : IMapLibreMapController
         if (_frontend != null || w < 1 || h < 1) return;
 
         _runLoop  = new MbglRunLoop();
-        // surface_handle = CAMetalLayer ObjC pointer; gl_context unused (Metal)
+        // surface_handle unused on Apple (Metal backend creates its own MTKView).
         _frontend = new MbglFrontend(
-            View.MetalLayer.Handle.Handle,
+            IntPtr.Zero,
             IntPtr.Zero,
             w, h, _pixelRatio, OnRender);
+
+        // Wire the MTKView (created by the C++ backend) into the container view.
+        var nativeViewPtr = _frontend.GetNativeView();
+        if (nativeViewPtr != IntPtr.Zero)
+        {
+            var metalView = ObjCRuntime.Runtime.GetNSObject<UIView>(nativeViewPtr)!;
+            metalView.Frame = View.Bounds;
+            View.InsertSubview(metalView, 0);
+        }
 
         _map = new MbglMap(_frontend, _runLoop,
                            pixelRatio: _pixelRatio,
@@ -143,7 +150,7 @@ public class MapLibreMapController : IMapLibreMapController
 
     private void OnRender()
     {
-        // Dispatch to main thread — Metal command buffers must be committed there.
+        // Dispatch to main thread ï¿½ Metal command buffers must be committed there.
         MainThread.BeginInvokeOnMainThread(() =>
         {
             _frontend?.Render();
