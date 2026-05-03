@@ -32,7 +32,7 @@
 #include <mbgl/style/layers/location_indicator_layer.hpp>
 #include <mbgl/style/conversion/geojson.hpp>
 #include <mbgl/style/conversion/filter.hpp>
-#include <mbgl/renderer/map_observer.hpp>
+#include <mbgl/map/map_observer.hpp>
 
 #include <memory>
 #include <string>

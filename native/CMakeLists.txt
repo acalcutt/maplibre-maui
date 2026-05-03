@@ -46,9 +46,11 @@ target_sources(mbgl-cabi PRIVATE
 if(WIN32)
     target_sources(mbgl-cabi PRIVATE src/platform_frontend_windows.cpp)
     target_compile_options(mbgl-cabi PRIVATE /wd4267)
+    target_include_directories(mbgl-cabi PRIVATE "${MAPLIBRE_NATIVE_DIR}/src")
 elseif(ANDROID)
     target_sources(mbgl-cabi PRIVATE src/platform_frontend_android.cpp)
     target_link_libraries(mbgl-cabi PRIVATE EGL android log)
+    target_include_directories(mbgl-cabi PRIVATE "${MAPLIBRE_NATIVE_DIR}/src")
 elseif(APPLE)
     target_sources(mbgl-cabi PRIVATE src/platform_frontend_apple.mm)
     set_source_files_properties(src/platform_frontend_apple.mm PROPERTIES
