@@ -14,7 +14,6 @@
 #include <mbgl/map/camera.hpp>
 #include <mbgl/util/run_loop.hpp>
 #include <mbgl/storage/resource_options.hpp>
-#include <mbgl/storage/default_file_source.hpp>
 #include <mbgl/style/style.hpp>
 #include <mbgl/style/sources/geojson_source.hpp>
 #include <mbgl/style/sources/vector_source.hpp>

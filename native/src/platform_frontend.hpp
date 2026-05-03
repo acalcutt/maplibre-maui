@@ -7,6 +7,7 @@
  *   iOS/mac  : platform_frontend_apple.cpp    (Metal / EGL)
  */
 #pragma once
+#include <mbgl/map/map_observer.hpp>
 #include <mbgl/renderer/renderer_frontend.hpp>
 #include <mbgl/renderer/renderer_observer.hpp>
 #include <mbgl/util/size.hpp>
