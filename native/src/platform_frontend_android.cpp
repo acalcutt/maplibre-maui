@@ -127,6 +127,7 @@ public:
     mbgl::Size getSize() const override { return _backend.getSize(); }
     mbgl::MapObserver& getObserver() override { return _nullObserver; }
     mbgl::Renderer* getRenderer() override { return _renderer.get(); }
+    const mbgl::TaggedScheduler& getThreadPool() const override { return _backend.getThreadPool(); }
 
 private:
     EGLBackend                              _backend;

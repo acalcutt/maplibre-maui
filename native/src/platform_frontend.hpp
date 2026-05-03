@@ -11,6 +11,7 @@
 #include <mbgl/renderer/renderer_frontend.hpp>
 #include <mbgl/renderer/renderer_observer.hpp>
 #include <mbgl/util/size.hpp>
+#include <mbgl/actor/scheduler.hpp>
 #include "mbgl_cabi.h"
 
 namespace mbgl { class Renderer; }
