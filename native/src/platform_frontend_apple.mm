@@ -143,7 +143,11 @@ public:
         res._mtlView.paused                    = YES; // we drive rendering ourselves
         res._mtlView.enableSetNeedsDisplay     = NO;
         res._mtlView.autoresizingMask          =
+#if TARGET_OS_IPHONE
             UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+#else
+            NSViewWidthSizable | NSViewHeightSizable;
+#endif
 
         res._delegate = [[MbglMetalViewDelegate alloc]
                          initWithCallback:std::move(drawCallback)];
