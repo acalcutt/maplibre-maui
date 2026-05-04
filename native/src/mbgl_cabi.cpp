@@ -77,25 +77,25 @@ public:
         if (fn) fn(name, detail, ud);
     }
 
-    void onCameraWillChange(mbgl::CameraChangeMode mode) override {
-        fire("onCameraWillChange", mode == mbgl::CameraChangeMode::Animated ? "animated" : "immediate");
+    void onCameraWillChange(CameraChangeMode mode) override {
+        fire("onCameraWillChange", mode == CameraChangeMode::Animated ? "animated" : "immediate");
     }
     void onCameraIsChanging() override { fire("onCameraIsChanging"); }
-    void onCameraDidChange(mbgl::CameraChangeMode mode) override {
-        fire("onCameraDidChange", mode == mbgl::CameraChangeMode::Animated ? "animated" : "immediate");
+    void onCameraDidChange(CameraChangeMode mode) override {
+        fire("onCameraDidChange", mode == CameraChangeMode::Animated ? "animated" : "immediate");
     }
     void onWillStartLoadingMap()  override { fire("onWillStartLoadingMap"); }
     void onDidFinishLoadingMap()  override { fire("onDidFinishLoadingMap"); }
-    void onDidFailLoadingMap(mbgl::MapLoadError /*err*/, const std::string& msg) override {
+    void onDidFailLoadingMap(MapLoadError /*err*/, const std::string& msg) override {
         fire("onDidFailLoadingMap", msg.c_str());
     }
     void onWillStartRenderingFrame() override { fire("onWillStartRenderingFrame"); }
-    void onDidFinishRenderingFrame(const mbgl::RenderFrameStatus& s) override {
+    void onDidFinishRenderingFrame(const RenderFrameStatus& s) override {
         fire(s.needsRepaint ? "onDidFinishRenderingFrameNeedsRepaint"
                             : "onDidFinishRenderingFrame");
     }
     void onWillStartRenderingMap() override { fire("onWillStartRenderingMap"); }
-    void onDidFinishRenderingMap(mbgl::RenderMode) override { fire("onDidFinishRenderingMap"); }
+    void onDidFinishRenderingMap(RenderMode) override { fire("onDidFinishRenderingMap"); }
     void onDidFinishLoadingStyle() override { fire("onDidFinishLoadingStyle"); }
     void onSourceChanged(mbgl::style::Source& src) override {
         fire("onSourceChanged", src.getID().c_str());
