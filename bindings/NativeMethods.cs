@@ -318,6 +318,109 @@ public static partial class NativeMethods
         StringMarshalling = StringMarshalling.Utf8)]
     public static partial void LayerSetLayoutProperty(IntPtr layer, string name, string valueJson);
 
+    // ── Map – gesture / interactive movement (Tier 1) ─────────────────────────
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_set_gesture_in_progress")]
+    public static partial void MapSetGestureInProgress(IntPtr map, int inProgress);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_move_by")]
+    public static partial void MapMoveBy(IntPtr map, double dx, double dy, long durationMs);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_rotate_by")]
+    public static partial void MapRotateBy(IntPtr map, double x0, double y0, double x1, double y1);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_pitch_by")]
+    public static partial void MapPitchBy(IntPtr map, double deltaDegrees, long durationMs);
+
+    // ── Map – option setters (Tier 1) ─────────────────────────────────────────
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_set_north_orientation")]
+    public static partial void MapSetNorthOrientation(IntPtr map, int orientation);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_set_constrain_mode")]
+    public static partial void MapSetConstrainMode(IntPtr map, int mode);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_set_viewport_mode")]
+    public static partial void MapSetViewportMode(IntPtr map, int mode);
+
+    // ── Map – bounds read-back (Tier 1) ───────────────────────────────────────
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_get_bounds")]
+    public static partial void MapGetBounds(IntPtr map,
+        out double latSw, out double lonSw,
+        out double latNe, out double lonNe,
+        out double minZoom, out double maxZoom,
+        out double minPitch, out double maxPitch);
+
+    // ── Map – tile LOD controls (Tier 2) ─────────────────────────────────────
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_set_prefetch_zoom_delta")]
+    public static partial void MapSetPrefetchZoomDelta(IntPtr map, int delta);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_get_prefetch_zoom_delta")]
+    public static partial int MapGetPrefetchZoomDelta(IntPtr map);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_set_tile_lod_min_radius")]
+    public static partial void MapSetTileLodMinRadius(IntPtr map, double radius);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_set_tile_lod_scale")]
+    public static partial void MapSetTileLodScale(IntPtr map, double scale);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_set_tile_lod_pitch_threshold")]
+    public static partial void MapSetTileLodPitchThreshold(IntPtr map, double thresholdRad);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_set_tile_lod_zoom_shift")]
+    public static partial void MapSetTileLodZoomShift(IntPtr map, double shift);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_set_tile_lod_mode")]
+    public static partial void MapSetTileLodMode(IntPtr map, int mode);
+
+    // ── Map – camera for point set (Tier 2) ───────────────────────────────────
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_camera_for_latlngs")]
+    public static unsafe partial void MapCameraForLatLngs(IntPtr map,
+        double* latLngs, int count,
+        double padTop, double padLeft, double padBottom, double padRight,
+        out double outLat, out double outLon,
+        out double outZoom, out double outBearing, out double outPitch);
+
+    // ── Map – batch projection (Tier 2) ───────────────────────────────────────
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_pixels_for_latlngs")]
+    public static unsafe partial void MapPixelsForLatLngs(IntPtr map,
+        double* latLngs, int count, double* outXy);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_latlngs_for_pixels")]
+    public static unsafe partial void MapLatLngsForPixels(IntPtr map,
+        double* xy, int count, double* outLatLngs);
+
+    // ── Style – enumeration (Tier 1) ─────────────────────────────────────────
+    [LibraryImport(Lib, EntryPoint = "mbgl_style_get_url")]
+    public static partial IntPtr StyleGetUrl(IntPtr style);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_style_get_name")]
+    public static partial IntPtr StyleGetName(IntPtr style);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_style_get_source_ids")]
+    public static partial IntPtr StyleGetSourceIds(IntPtr style);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_style_get_layer_ids")]
+    public static partial IntPtr StyleGetLayerIds(IntPtr style);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_style_get_layer",
+        StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr StyleGetLayer(IntPtr style, string layerId);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_style_get_source",
+        StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr StyleGetSource(IntPtr style, string sourceId);
+
+    // ── Layer – read-back (Tier 1) ────────────────────────────────────────────
+    [LibraryImport(Lib, EntryPoint = "mbgl_layer_get_paint_property",
+        StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr LayerGetPaintProperty(IntPtr layer, string name);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_layer_get_layout_property",
+        StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr LayerGetLayoutProperty(IntPtr layer, string name);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_layer_get_visibility")]
+    public static partial int LayerGetVisibility(IntPtr layer);
+
 #if ANDROID
     // ── Android ANativeWindow helpers ──────────────────────────────────────────
     [DllImport(Lib, EntryPoint = "mbgl_android_acquire_window")]

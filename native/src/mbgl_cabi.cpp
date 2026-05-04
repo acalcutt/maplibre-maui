@@ -42,11 +42,17 @@
 #include <mbgl/renderer/renderer.hpp>
 #include <mbgl/util/geojson.hpp>
 
+#include <mbgl/map/bound_options.hpp>
+#include <mbgl/style/conversion/stringify.hpp>
+#include <rapidjson/writer.h>
+#include <rapidjson/stringbuffer.h>
+
 #include <memory>
 #include <string>
 #include <stdexcept>
 #include <cmath>
 #include <sstream>
+#include <limits>
 
 // Platform frontend is provided separately per platform.
 #include "platform_frontend.hpp"
@@ -664,6 +670,226 @@ char* mbgl_map_query_rendered_features_in_box(mbgl_map_t map,
 
 void mbgl_free_string(char* str) {
     delete[] str;
+}
+
+/* ─── Internal helpers ───────────────────────────────────────────────────────── */
+static constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
+
+static char* dup_string(const std::string& s) {
+    char* result = new char[s.size() + 1];
+    std::copy(s.begin(), s.end(), result);
+    result[s.size()] = '\0';
+    return result;
+}
+
+/* ─── Tier 1 – gesture / interactive movement ───────────────────────────────── */
+
+void mbgl_map_set_gesture_in_progress(mbgl_map_t map, int in_progress) {
+    static_cast<CabiMap*>(map)->map->setGestureInProgress(in_progress != 0);
+}
+
+void mbgl_map_move_by(mbgl_map_t map, double dx, double dy, int64_t duration_ms) {
+    mbgl::AnimationOptions anim;
+    if (duration_ms > 0) anim.duration = mbgl::Duration(std::chrono::milliseconds(duration_ms));
+    static_cast<CabiMap*>(map)->map->moveBy({dx, dy}, anim);
+}
+
+void mbgl_map_rotate_by(mbgl_map_t map, double x0, double y0, double x1, double y1) {
+    static_cast<CabiMap*>(map)->map->rotateBy({x0, y0}, {x1, y1});
+}
+
+void mbgl_map_pitch_by(mbgl_map_t map, double delta_degrees, int64_t duration_ms) {
+    mbgl::AnimationOptions anim;
+    if (duration_ms > 0) anim.duration = mbgl::Duration(std::chrono::milliseconds(duration_ms));
+    static_cast<CabiMap*>(map)->map->pitchBy(delta_degrees, anim);
+}
+
+/* ─── Tier 1 – map option setters ───────────────────────────────────────────── */
+
+void mbgl_map_set_north_orientation(mbgl_map_t map, int orientation) {
+    static_cast<CabiMap*>(map)->map->setNorthOrientation(
+        static_cast<mbgl::NorthOrientation>(orientation));
+}
+
+void mbgl_map_set_constrain_mode(mbgl_map_t map, int mode) {
+    static_cast<CabiMap*>(map)->map->setConstrainMode(
+        static_cast<mbgl::ConstrainMode>(mode));
+}
+
+void mbgl_map_set_viewport_mode(mbgl_map_t map, int mode) {
+    static_cast<CabiMap*>(map)->map->setViewportMode(
+        static_cast<mbgl::ViewportMode>(mode));
+}
+
+/* ─── Tier 1 – bounds read-back ─────────────────────────────────────────────── */
+
+void mbgl_map_get_bounds(mbgl_map_t map,
+                          double* out_lat_sw, double* out_lon_sw,
+                          double* out_lat_ne, double* out_lon_ne,
+                          double* out_min_zoom, double* out_max_zoom,
+                          double* out_min_pitch, double* out_max_pitch) {
+    auto b = static_cast<CabiMap*>(map)->map->getBounds();
+    if (out_lat_sw)   *out_lat_sw   = b.bounds ? b.bounds->south() : kNaN;
+    if (out_lon_sw)   *out_lon_sw   = b.bounds ? b.bounds->west()  : kNaN;
+    if (out_lat_ne)   *out_lat_ne   = b.bounds ? b.bounds->north() : kNaN;
+    if (out_lon_ne)   *out_lon_ne   = b.bounds ? b.bounds->east()  : kNaN;
+    if (out_min_zoom) *out_min_zoom = b.minZoom.value_or(kNaN);
+    if (out_max_zoom) *out_max_zoom = b.maxZoom.value_or(kNaN);
+    if (out_min_pitch) *out_min_pitch = b.minPitch.value_or(kNaN);
+    if (out_max_pitch) *out_max_pitch = b.maxPitch.value_or(kNaN);
+}
+
+/* ─── Tier 2 – prefetch zoom delta ──────────────────────────────────────────── */
+
+void mbgl_map_set_prefetch_zoom_delta(mbgl_map_t map, int delta) {
+    int clamped = delta < 0 ? 0 : (delta > 255 ? 255 : delta);
+    static_cast<CabiMap*>(map)->map->setPrefetchZoomDelta(static_cast<uint8_t>(clamped));
+}
+
+int mbgl_map_get_prefetch_zoom_delta(mbgl_map_t map) {
+    return static_cast<int>(static_cast<CabiMap*>(map)->map->getPrefetchZoomDelta());
+}
+
+/* ─── Tier 2 – tile LOD controls ────────────────────────────────────────────── */
+
+void mbgl_map_set_tile_lod_min_radius(mbgl_map_t map, double radius) {
+    static_cast<CabiMap*>(map)->map->setTileLodMinRadius(radius);
+}
+
+void mbgl_map_set_tile_lod_scale(mbgl_map_t map, double scale) {
+    static_cast<CabiMap*>(map)->map->setTileLodScale(scale);
+}
+
+void mbgl_map_set_tile_lod_pitch_threshold(mbgl_map_t map, double threshold_rad) {
+    static_cast<CabiMap*>(map)->map->setTileLodPitchThreshold(threshold_rad);
+}
+
+void mbgl_map_set_tile_lod_zoom_shift(mbgl_map_t map, double shift) {
+    static_cast<CabiMap*>(map)->map->setTileLodZoomShift(shift);
+}
+
+void mbgl_map_set_tile_lod_mode(mbgl_map_t map, int mode) {
+    static_cast<CabiMap*>(map)->map->setTileLodMode(
+        static_cast<mbgl::TileLodMode>(mode));
+}
+
+/* ─── Tier 2 – camera for lat/lng point set ─────────────────────────────────── */
+
+void mbgl_map_camera_for_latlngs(mbgl_map_t map,
+                                   const double* latlngs, int count,
+                                   double pad_top, double pad_left,
+                                   double pad_bottom, double pad_right,
+                                   double* out_lat, double* out_lon,
+                                   double* out_zoom, double* out_bearing,
+                                   double* out_pitch) {
+    std::vector<mbgl::LatLng> pts;
+    pts.reserve(static_cast<size_t>(count));
+    for (int i = 0; i < count; ++i)
+        pts.emplace_back(latlngs[i * 2], latlngs[i * 2 + 1]);
+    mbgl::EdgeInsets padding{ pad_top, pad_left, pad_bottom, pad_right };
+    auto cam = static_cast<CabiMap*>(map)->map->cameraForLatLngs(pts, padding);
+    if (out_lat)     *out_lat     = cam.center ? cam.center->latitude()  : kNaN;
+    if (out_lon)     *out_lon     = cam.center ? cam.center->longitude() : kNaN;
+    if (out_zoom)    *out_zoom    = cam.zoom.value_or(kNaN);
+    if (out_bearing) *out_bearing = cam.bearing.value_or(kNaN);
+    if (out_pitch)   *out_pitch   = cam.pitch.value_or(kNaN);
+}
+
+/* ─── Tier 2 – batch projection ─────────────────────────────────────────────── */
+
+void mbgl_map_pixels_for_latlngs(mbgl_map_t map,
+                                   const double* latlngs, int count,
+                                   double* out_xy) {
+    std::vector<mbgl::LatLng> pts;
+    pts.reserve(static_cast<size_t>(count));
+    for (int i = 0; i < count; ++i)
+        pts.emplace_back(latlngs[i * 2], latlngs[i * 2 + 1]);
+    auto pixels = static_cast<CabiMap*>(map)->map->pixelsForLatLngs(pts);
+    for (size_t i = 0; i < pixels.size(); ++i) {
+        out_xy[i * 2]     = pixels[i].x;
+        out_xy[i * 2 + 1] = pixels[i].y;
+    }
+}
+
+void mbgl_map_latlngs_for_pixels(mbgl_map_t map,
+                                   const double* xy, int count,
+                                   double* out_ll) {
+    std::vector<mbgl::ScreenCoordinate> pts;
+    pts.reserve(static_cast<size_t>(count));
+    for (int i = 0; i < count; ++i)
+        pts.emplace_back(xy[i * 2], xy[i * 2 + 1]);
+    auto latlngs = static_cast<CabiMap*>(map)->map->latLngsForPixels(pts);
+    for (size_t i = 0; i < latlngs.size(); ++i) {
+        out_ll[i * 2]     = latlngs[i].latitude();
+        out_ll[i * 2 + 1] = latlngs[i].longitude();
+    }
+}
+
+/* ─── Tier 1 – style enumeration ────────────────────────────────────────────── */
+
+char* mbgl_style_get_url(mbgl_style_t st) {
+    return dup_string(style_ref(st).getURL());
+}
+
+char* mbgl_style_get_name(mbgl_style_t st) {
+    return dup_string(style_ref(st).getName());
+}
+
+char* mbgl_style_get_source_ids(mbgl_style_t st) {
+    auto sources = style_ref(st).getSources();
+    std::string result;
+    for (auto* src : sources) {
+        if (!result.empty()) result += '\n';
+        result += src->getID();
+    }
+    return dup_string(result);
+}
+
+char* mbgl_style_get_layer_ids(mbgl_style_t st) {
+    auto layers = style_ref(st).getLayers();
+    std::string result;
+    for (auto* layer : layers) {
+        if (!result.empty()) result += '\n';
+        result += layer->getID();
+    }
+    return dup_string(result);
+}
+
+mbgl_layer_t mbgl_style_get_layer(mbgl_style_t st, const char* layer_id) {
+    return style_ref(st).getLayer(safe_str(layer_id));
+}
+
+mbgl_source_t mbgl_style_get_source(mbgl_style_t st, const char* source_id) {
+    return style_ref(st).getSource(safe_str(source_id));
+}
+
+/* ─── Layer read-back ────────────────────────────────────────────────────────── */
+
+static char* style_property_to_json(const mbgl::style::StyleProperty& prop) {
+    if (prop.getKind() == mbgl::style::StyleProperty::Kind::Undefined)
+        return nullptr;
+    rapidjson::StringBuffer sb;
+    rapidjson::Writer<rapidjson::StringBuffer,
+                       rapidjson::UTF8<>, rapidjson::UTF8<>,
+                       rapidjson::CrtAllocator> writer(sb);
+    mbgl::style::conversion::stringify(writer, prop.getValue());
+    return dup_string(std::string(sb.GetString(), sb.GetSize()));
+}
+
+char* mbgl_layer_get_paint_property(mbgl_layer_t layer, const char* name) {
+    if (!layer || !name) return nullptr;
+    return style_property_to_json(static_cast<mbgl::style::Layer*>(layer)->getProperty(safe_str(name)));
+}
+
+char* mbgl_layer_get_layout_property(mbgl_layer_t layer, const char* name) {
+    if (!layer || !name) return nullptr;
+    return style_property_to_json(static_cast<mbgl::style::Layer*>(layer)->getProperty(safe_str(name)));
+}
+
+int mbgl_layer_get_visibility(mbgl_layer_t layer) {
+    if (!layer) return 1;
+    return static_cast<mbgl::style::Layer*>(layer)->getVisibility()
+               == mbgl::style::VisibilityType::Visible ? 1 : 0;
 }
 
 /* ─── Version ───────────────────────────────────────────────────────────────── */

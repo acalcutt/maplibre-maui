@@ -123,6 +123,62 @@ public sealed class MbglStyle
     /// <summary>Set a Light property, serializing the value from a C# object.</summary>
     public void SetLightProperty(string name, object? value)
         => SetLightProperty(name, JsonSerializer.Serialize(value));
+
+    // ── Style enumeration (Tier 1) ────────────────────────────────────────────
+
+    /// <summary>Returns the URL from which the style was loaded, or empty string.</summary>
+    public string GetUrl()
+    {
+        var ptr = NativeMethods.StyleGetUrl(Handle);
+        if (ptr == IntPtr.Zero) return string.Empty;
+        var result = Marshal.PtrToStringUTF8(ptr) ?? string.Empty;
+        NativeMethods.FreeString(ptr);
+        return result;
+    }
+
+    /// <summary>Returns the human-readable name of the loaded style, or empty string.</summary>
+    public string GetName()
+    {
+        var ptr = NativeMethods.StyleGetName(Handle);
+        if (ptr == IntPtr.Zero) return string.Empty;
+        var result = Marshal.PtrToStringUTF8(ptr) ?? string.Empty;
+        NativeMethods.FreeString(ptr);
+        return result;
+    }
+
+    /// <summary>Returns an array of all source IDs currently in the style.</summary>
+    public string[] GetSourceIds()
+    {
+        var ptr = NativeMethods.StyleGetSourceIds(Handle);
+        if (ptr == IntPtr.Zero) return [];
+        var raw = Marshal.PtrToStringUTF8(ptr) ?? string.Empty;
+        NativeMethods.FreeString(ptr);
+        return raw.Length == 0 ? [] : raw.Split('\n');
+    }
+
+    /// <summary>Returns an array of all layer IDs in draw order.</summary>
+    public string[] GetLayerIds()
+    {
+        var ptr = NativeMethods.StyleGetLayerIds(Handle);
+        if (ptr == IntPtr.Zero) return [];
+        var raw = Marshal.PtrToStringUTF8(ptr) ?? string.Empty;
+        NativeMethods.FreeString(ptr);
+        return raw.Length == 0 ? [] : raw.Split('\n');
+    }
+
+    /// <summary>Gets a layer handle by ID, or <c>null</c> if not found.</summary>
+    public MbglLayer? GetLayer(string layerId)
+    {
+        var ptr = NativeMethods.StyleGetLayer(Handle, layerId);
+        return ptr == IntPtr.Zero ? null : new MbglLayer(ptr);
+    }
+
+    /// <summary>Gets a source handle by ID, or <c>null</c> if not found.</summary>
+    public MbglSource? GetSource(string sourceId)
+    {
+        var ptr = NativeMethods.StyleGetSource(Handle, sourceId);
+        return ptr == IntPtr.Zero ? null : new MbglSource(ptr);
+    }
 }
 
 // ── Source handle ─────────────────────────────────────────────────────────────
@@ -174,4 +230,30 @@ public sealed class MbglLayer
 
     public void SetLayoutProperty(string name, object? value)
         => SetLayoutProperty(name, JsonSerializer.Serialize(value));
+
+    // ── Layer read-back (Tier 1) ──────────────────────────────────────────────
+
+    /// <summary>Returns the JSON-encoded value of a paint property, or <c>null</c> if not set.</summary>
+    public string? GetPaintProperty(string name)
+    {
+        var ptr = NativeMethods.LayerGetPaintProperty(Handle, name);
+        if (ptr == IntPtr.Zero) return null;
+        var result = Marshal.PtrToStringUTF8(ptr);
+        NativeMethods.FreeString(ptr);
+        return result;
+    }
+
+    /// <summary>Returns the JSON-encoded value of a layout property, or <c>null</c> if not set.</summary>
+    public string? GetLayoutProperty(string name)
+    {
+        var ptr = NativeMethods.LayerGetLayoutProperty(Handle, name);
+        if (ptr == IntPtr.Zero) return null;
+        var result = Marshal.PtrToStringUTF8(ptr);
+        NativeMethods.FreeString(ptr);
+        return result;
+    }
+
+    /// <summary>Returns <c>true</c> if the layer is visible.</summary>
+    public bool GetVisibility()
+        => NativeMethods.LayerGetVisibility(Handle) != 0;
 }

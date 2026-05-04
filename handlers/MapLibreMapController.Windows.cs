@@ -644,6 +644,41 @@ public class MapLibreMapController : IMapLibreMapController
         string? layerIds = null)
         => _map?.QueryRenderedFeaturesInBox(x1, y1, x2, y2, layerIds);
 
+    // ── Tier 1 – gesture / interactive movement ───────────────────────────────
+    public void SetGestureInProgress(bool inProgress) => _map?.SetGestureInProgress(inProgress);
+    public void MoveBy(double dx, double dy, long durationMs = 0) => _map?.MoveBy(dx, dy, durationMs);
+    public void RotateBy(double x0, double y0, double x1, double y1) => _map?.RotateBy(x0, y0, x1, y1);
+    public void PitchBy(double deltaDegrees, long durationMs = 0) => _map?.PitchBy(deltaDegrees, durationMs);
+
+    // ── Tier 1 – map option setters ───────────────────────────────────────────
+    public void SetNorthOrientation(int orientation) => _map?.SetNorthOrientation(orientation);
+    public void SetConstrainMode(int mode) => _map?.SetConstrainMode(mode);
+    public void SetViewportMode(int mode) => _map?.SetViewportMode(mode);
+
+    // ── Tier 1 – bounds read-back ─────────────────────────────────────────────
+    public BoundOptions GetBounds() => _map?.GetBounds() ?? default;
+
+    // ── Tier 2 – tile LOD / prefetch ─────────────────────────────────────────
+    public void SetPrefetchZoomDelta(int delta) => _map?.SetPrefetchZoomDelta(delta);
+    public int  GetPrefetchZoomDelta() => _map?.GetPrefetchZoomDelta() ?? 4;
+    public void SetTileLodMinRadius(double radius) => _map?.SetTileLodMinRadius(radius);
+    public void SetTileLodScale(double scale) => _map?.SetTileLodScale(scale);
+    public void SetTileLodPitchThreshold(double thresholdRadians) => _map?.SetTileLodPitchThreshold(thresholdRadians);
+    public void SetTileLodZoomShift(double shift) => _map?.SetTileLodZoomShift(shift);
+    public void SetTileLodMode(int mode) => _map?.SetTileLodMode(mode);
+
+    // ── Tier 2 – camera / batch projection ───────────────────────────────────
+    public CameraResult CameraForLatLngs(
+        IReadOnlyList<(double Lat, double Lon)> points,
+        double padTop = 0, double padLeft = 0, double padBottom = 0, double padRight = 0)
+        => _map?.CameraForLatLngs(points, padTop, padLeft, padBottom, padRight) ?? default;
+
+    public (double X, double Y)[] PixelsForLatLngs(IReadOnlyList<(double Lat, double Lon)> points)
+        => _map?.PixelsForLatLngs(points) ?? [];
+
+    public (double Lat, double Lon)[] LatLngsForPixels(IReadOnlyList<(double X, double Y)> pixels)
+        => _map?.LatLngsForPixels(pixels) ?? [];
+
     // ── Input forwarding (called by MapLibreMapHandler) ───────────────────────
 
     public void OnPointerWheelChanged(double delta, double cx, double cy)

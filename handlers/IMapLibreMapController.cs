@@ -1,4 +1,5 @@
 using Maui.MapLibre.Handlers.Geometry;
+using Maui.MapLibre.Native;
 using Map = Maui.MapLibre.Handlers.Maps.Map;
 using Style = Maui.MapLibre.Handlers.Maps.Style;
 
@@ -148,4 +149,43 @@ public interface IMapLibreMapController : IMapLibreMapOptionsSink
 
     // Map state
     void CancelTransitions();
+
+    // ── Tier 1 – gesture / interactive movement ───────────────────────────────
+    void SetGestureInProgress(bool inProgress);
+    void MoveBy(double dx, double dy, long durationMs = 0);
+    void RotateBy(double x0, double y0, double x1, double y1);
+    void PitchBy(double deltaDegrees, long durationMs = 0);
+
+    // ── Tier 1 – map option setters ───────────────────────────────────────────
+    /// <param name="orientation">0=Upwards 1=Rightwards 2=Downwards 3=Leftwards</param>
+    void SetNorthOrientation(int orientation);
+    /// <param name="mode">0=None 1=HeightOnly 2=WidthAndHeight 3=Screen</param>
+    void SetConstrainMode(int mode);
+    /// <param name="mode">0=Default 1=FlippedY</param>
+    void SetViewportMode(int mode);
+
+    // ── Tier 1 – bounds read-back ─────────────────────────────────────────────
+    BoundOptions GetBounds();
+
+    // ── Tier 2 – tile LOD / prefetch ─────────────────────────────────────────
+    void SetPrefetchZoomDelta(int delta);
+    int  GetPrefetchZoomDelta();
+    void SetTileLodMinRadius(double radius);
+    void SetTileLodScale(double scale);
+    void SetTileLodPitchThreshold(double thresholdRadians);
+    void SetTileLodZoomShift(double shift);
+    /// <param name="mode">0=Default 1=Distance</param>
+    void SetTileLodMode(int mode);
+
+    // ── Tier 2 – camera / projection ─────────────────────────────────────────
+    CameraResult CameraForLatLngs(
+        IReadOnlyList<(double Lat, double Lon)> points,
+        double padTop = 0, double padLeft = 0,
+        double padBottom = 0, double padRight = 0);
+
+    (double X, double Y)[] PixelsForLatLngs(
+        IReadOnlyList<(double Lat, double Lon)> points);
+
+    (double Lat, double Lon)[] LatLngsForPixels(
+        IReadOnlyList<(double X, double Y)> pixels);
 }

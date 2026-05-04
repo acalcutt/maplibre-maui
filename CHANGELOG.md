@@ -6,8 +6,23 @@
 - Camera read-back: `GetZoom()`, `GetBearing()`, `GetPitch()`, `GetCenter()`
 - Projection helpers: `LatLngToScreenPoint`, `ScreenPointToLatLng`
 - Queries: `QueryRenderedFeaturesAtPoint`, `QueryRenderedFeaturesInBox` (returns GeoJSON FeatureCollection string)
+- Observer wiring fixed — all 14 `MapObserver` virtuals now correctly routed to the C callback via `CabiMapObserver`
+- Light API: `MbglStyle.SetLightProperty(name, valueJson)` — anchor, color, intensity, position
+- Transition options: `MbglStyle.SetTransition(durationMs, delayMs)`
+- `CancelTransitions()` + `IsFullyLoaded` on `MbglMap`
+- **Tier 1** — Interactive movement: `SetGestureInProgress`, `MoveBy`, `RotateBy`, `PitchBy` (all with optional animation duration)
+- **Tier 1** — Map option post-create setters: `SetNorthOrientation`, `SetConstrainMode`, `SetViewportMode`
+- **Tier 1** — Bounds read-back: `GetBounds()` → `BoundOptions` record (lat/lng box + zoom/pitch limits, NaN for unset)
+- **Tier 1** — Style enumeration: `GetUrl()`, `GetName()`, `GetSourceIds()`, `GetLayerIds()`, `GetLayer(id)`, `GetSource(id)`
+- **Tier 1** — Layer read-back: `GetPaintProperty(name)`, `GetLayoutProperty(name)`, `GetVisibility()`
+- **Tier 2** — Tile LOD controls: `SetTileLodMinRadius`, `SetTileLodScale`, `SetTileLodPitchThreshold`, `SetTileLodZoomShift`, `SetTileLodMode` (0=Default, 1=Distance)
+- **Tier 2** — Tile prefetch: `SetPrefetchZoomDelta` / `GetPrefetchZoomDelta`
+- **Tier 2** — Camera fit to point set: `CameraForLatLngs(points, padding)` → `CameraResult`
+- **Tier 2** — Batch projection: `PixelsForLatLngs(points)`, `LatLngsForPixels(pixels)`
+- All new APIs surface on `IMapLibreMapController` and are implemented in all three platform controllers (Android, iOS/macCatalyst, Windows)
 
 ### 🐞 Bug fixes
+- Memory leak in `mbgl_map_destroy`: `frontend.release()` → `frontend.reset()`
 - _...Add new stuff here..._
 
 
