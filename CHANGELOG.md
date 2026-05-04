@@ -7,6 +7,11 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
+## 1.1.1
+### ✨ Features and improvements
+
+### 🐞 Bug fixes
+
 ## 1.1.0
 ### ✨ Features and improvements
 - Camera operations exposed on `IMapLibreMapController`: `FlyTo`, `EaseTo`, `JumpTo` (bearing + pitch), `SetCameraTargetBounds` (min/max zoom + pitch)
