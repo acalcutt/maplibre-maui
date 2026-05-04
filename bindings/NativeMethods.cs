@@ -21,7 +21,10 @@ public static partial class NativeMethods
 
     // ── Callbacks ─────────────────────────────────────────────────────────────
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate void MapObserverFn([MarshalAs(UnmanagedType.LPUTF8Str)] string eventName, IntPtr userdata);
+    public delegate void MapObserverFn(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string  eventName,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? detail,
+        IntPtr userdata);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void RenderFn(IntPtr userdata);
@@ -129,6 +132,12 @@ public static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "mbgl_map_trigger_repaint")]
     public static partial void MapTriggerRepaint(IntPtr map);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_cancel_transitions")]
+    public static partial void MapCancelTransitions(IntPtr map);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_map_is_fully_loaded")]
+    public static partial int MapIsFullyLoaded(IntPtr map);
 
     [LibraryImport(Lib, EntryPoint = "mbgl_map_fly_to")]
     public static partial void MapFlyTo(IntPtr map, double lat, double lon,
@@ -265,6 +274,16 @@ public static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "mbgl_style_remove_image",
         StringMarshalling = StringMarshalling.Utf8)]
     public static partial void StyleRemoveImage(IntPtr style, string imageId);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_style_get_json")]
+    public static partial IntPtr StyleGetJson(IntPtr style);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_style_set_transition")]
+    public static partial void StyleSetTransition(IntPtr style, long durationMs, long delayMs);
+
+    [LibraryImport(Lib, EntryPoint = "mbgl_style_set_light_property",
+        StringMarshalling = StringMarshalling.Utf8)]
+    public static partial void StyleSetLightProperty(IntPtr style, string name, string valueJson);
 
     [LibraryImport(Lib, EntryPoint = "mbgl_style_remove_layer",
         StringMarshalling = StringMarshalling.Utf8)]

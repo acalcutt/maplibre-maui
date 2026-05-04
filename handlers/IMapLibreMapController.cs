@@ -18,6 +18,10 @@ public interface IMapLibreMapController : IMapLibreMapOptionsSink
     public event Func<LatLng, bool>? OnMapLongClickReceived;
     public event Action<Style>? OnStyleLoadedReceived;
     public event Action<Location>? OnUserLocationUpdateReceived;
+    /// <summary>Fired when the map fails to load its style. The string is the error message.</summary>
+    public event Action<string>? OnDidFailLoadingMapReceived;
+    /// <summary>Fired when a style image is missing. The string is the image ID.</summary>
+    public event Action<string>? OnStyleImageMissingReceived;
     
     // Sources
     public void AddGeoJsonSource(string sourceName, string source);
@@ -141,4 +145,7 @@ public interface IMapLibreMapController : IMapLibreMapOptionsSink
     public string? QueryRenderedFeaturesAtPoint(double x, double y, string? layerIds = null);
     public string? QueryRenderedFeaturesInBox(double x1, double y1, double x2, double y2,
         string? layerIds = null);
+
+    // Map state
+    void CancelTransitions();
 }

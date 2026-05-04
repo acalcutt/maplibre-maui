@@ -36,6 +36,8 @@
 #include <mbgl/style/rapidjson_conversion.hpp>
 #include <mbgl/map/map_observer.hpp>
 #include <mbgl/style/image.hpp>
+#include <mbgl/style/transition_options.hpp>
+#include <mbgl/style/light.hpp>
 #include <mbgl/util/image.hpp>
 #include <mbgl/renderer/renderer.hpp>
 #include <mbgl/util/geojson.hpp>
@@ -59,16 +61,55 @@ extern PlatformFrontend* createPlatformFrontend(
     void*          render_userdata);
 
 /* ─── Internal structs ──────────────────────────────────────────────────────── */
+/** Bridges all MapObserver virtual calls to the C mbgl_map_observer_fn. */
+class CabiMapObserver : public mbgl::MapObserver {
+public:
+    mbgl_map_observer_fn fn = nullptr;
+    void*                ud = nullptr;
 
+    void fire(const char* name, const char* detail = nullptr) const {
+        if (fn) fn(name, detail, ud);
+    }
+
+    void onCameraWillChange(CameraChangeMode mode) override {
+        fire("onCameraWillChange", mode == CameraChangeMode::Animated ? "animated" : "immediate");
+    }
+    void onCameraIsChanging() override { fire("onCameraIsChanging"); }
+    void onCameraDidChange(CameraChangeMode mode) override {
+        fire("onCameraDidChange", mode == CameraChangeMode::Animated ? "animated" : "immediate");
+    }
+    void onWillStartLoadingMap()  override { fire("onWillStartLoadingMap"); }
+    void onDidFinishLoadingMap()  override { fire("onDidFinishLoadingMap"); }
+    void onDidFailLoadingMap(MapLoadError /*err*/, const std::string& msg) override {
+        fire("onDidFailLoadingMap", msg.c_str());
+    }
+    void onWillStartRenderingFrame() override { fire("onWillStartRenderingFrame"); }
+    void onDidFinishRenderingFrame(const RenderFrameStatus& s) override {
+        fire(s.needsRepaint ? "onDidFinishRenderingFrameNeedsRepaint"
+                            : "onDidFinishRenderingFrame");
+    }
+    void onWillStartRenderingMap() override { fire("onWillStartRenderingMap"); }
+    void onDidFinishRenderingMap(RenderMode) override { fire("onDidFinishRenderingMap"); }
+    void onDidFinishLoadingStyle() override { fire("onDidFinishLoadingStyle"); }
+    void onSourceChanged(mbgl::style::Source& src) override {
+        fire("onSourceChanged", src.getID().c_str());
+    }
+    void onDidBecomeIdle() override { fire("onDidBecomeIdle"); }
+    void onStyleImageMissing(const std::string& id) override {
+        fire("onStyleImageMissing", id.c_str());
+    }
+};
 struct CabiRunLoop {
     mbgl::util::RunLoop loop;
 };
 
 struct CabiMap {
+    // Destruction order matters: map must die before frontend and observer.
+    // unique_ptrs are destroyed in reverse declaration order, so declare
+    // observer first so it is destroyed last.
+    std::unique_ptr<CabiMapObserver>      observer;
     std::unique_ptr<PlatformFrontend>     frontend;
     std::unique_ptr<mbgl::Map>            map;
-    mbgl_map_observer_fn                  observer_fn  = nullptr;
-    void*                                 observer_ud  = nullptr;
 };
 
 /* Helper: safe C-string copy */
@@ -139,9 +180,10 @@ mbgl_map_t mbgl_map_create(
 {
     auto* cabi_fe  = static_cast<PlatformFrontend*>(fe);
     auto* cabi_map = new CabiMap{};
-    cabi_map->frontend   = std::unique_ptr<PlatformFrontend>(cabi_fe);
-    cabi_map->observer_fn = observer;
-    cabi_map->observer_ud = observer_userdata;
+    cabi_map->frontend  = std::unique_ptr<PlatformFrontend>(cabi_fe);
+    cabi_map->observer  = std::make_unique<CabiMapObserver>();
+    cabi_map->observer->fn = observer;
+    cabi_map->observer->ud = observer_userdata;
 
     mbgl::ResourceOptions resOpts;
     if (cache_path) resOpts.withCachePath(cache_path);
@@ -155,8 +197,8 @@ mbgl_map_t mbgl_map_create(
            .withPixelRatio(pixel_ratio);
 
     cabi_map->map = std::make_unique<mbgl::Map>(
-        *cabi_fe,          // RendererFrontend&
-        cabi_map->frontend->getObserver(),
+        *cabi_fe,
+        *cabi_map->observer,   // CabiMapObserver fires the C callback
         mapOpts,
         resOpts
     );
@@ -166,9 +208,9 @@ mbgl_map_t mbgl_map_create(
 
 void mbgl_map_destroy(mbgl_map_t map) {
     auto* m = static_cast<CabiMap*>(map);
-    m->map.reset();
-    // frontend already owned by CabiMap, reset separately so map goes first
-    m->frontend.release(); // already destroyed via map
+    m->map.reset();      // Map must die before frontend and observer
+    m->frontend.reset(); // Frontend after Map
+    m->observer.reset(); // Observer last
     delete m;
 }
 
@@ -228,6 +270,14 @@ void mbgl_map_set_min_zoom(mbgl_map_t map, double zoom) { static_cast<CabiMap*>(
 void mbgl_map_set_max_zoom(mbgl_map_t map, double zoom) { static_cast<CabiMap*>(map)->map->setBounds(mbgl::BoundOptions{}.withMaxZoom(zoom)); }
 
 void mbgl_map_trigger_repaint(mbgl_map_t map) { static_cast<CabiMap*>(map)->map->triggerRepaint(); }
+
+void mbgl_map_cancel_transitions(mbgl_map_t map) {
+    static_cast<CabiMap*>(map)->map->cancelTransitions();
+}
+
+int mbgl_map_is_fully_loaded(mbgl_map_t map) {
+    return static_cast<CabiMap*>(map)->map->isFullyLoaded() ? 1 : 0;
+}
 
 /* Input — MapLibre internal camera manipulation via ScreenCoordinate transform */
 void mbgl_map_on_scroll(mbgl_map_t map, double delta, double cx, double cy) {
@@ -529,6 +579,31 @@ void mbgl_style_add_image(mbgl_style_t st, const char* image_id,
 
 void mbgl_style_remove_image(mbgl_style_t st, const char* image_id) {
     style_ref(st).removeImage(safe_str(image_id));
+}
+
+char* mbgl_style_get_json(mbgl_style_t st) {
+    std::string json = style_ref(st).getJSON();
+    char* result = new char[json.size() + 1];
+    std::copy(json.begin(), json.end(), result);
+    result[json.size()] = '\0';
+    return result;
+}
+
+void mbgl_style_set_transition(mbgl_style_t st, int64_t duration_ms, int64_t delay_ms) {
+    mbgl::style::TransitionOptions opts;
+    opts.duration = mbgl::Duration(std::chrono::milliseconds(duration_ms));
+    opts.delay    = mbgl::Duration(std::chrono::milliseconds(delay_ms));
+    style_ref(st).setTransitionOptions(opts);
+}
+
+void mbgl_style_set_light_property(mbgl_style_t st, const char* name, const char* value_json) {
+    auto* light = style_ref(st).getLight();
+    if (!light || !name || !value_json) return;
+    mbgl::JSDocument doc;
+    doc.Parse(value_json);
+    if (doc.HasParseError()) return;
+    const mbgl::JSValue& v = doc;
+    light->setProperty(safe_str(name), mbgl::style::conversion::Convertible(&v));
 }
 
 /* ─── Layers – additional types ─────────────────────────────────────────────── */

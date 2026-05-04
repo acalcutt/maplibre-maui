@@ -22,12 +22,12 @@ public sealed class MbglMap : IDisposable
         string? cachePath = null,
         string? assetPath = null,
         float   pixelRatio = 1.0f,
-        Action<string>? observer = null)
+        Action<string, string?>? observer = null)
     {
         NativeMethods.MapObserverFn? nativeObserver = null;
         if (observer != null)
         {
-            nativeObserver = (eventName, _) => observer(eventName);
+            nativeObserver = (eventName, detail, _) => observer(eventName, detail);
             _observerHandle = GCHandle.Alloc(nativeObserver);
         }
 
@@ -146,6 +146,8 @@ public sealed class MbglMap : IDisposable
         => NativeMethods.MapOnPinch(Handle, scaleFactor, cx, cy);
 
     public void TriggerRepaint() => NativeMethods.MapTriggerRepaint(Handle);
+    public void CancelTransitions() => NativeMethods.MapCancelTransitions(Handle);
+    public bool IsFullyLoaded => NativeMethods.MapIsFullyLoaded(Handle) != 0;
 
     public MbglStyle GetStyle()
     {

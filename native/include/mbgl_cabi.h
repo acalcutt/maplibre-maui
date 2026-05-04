@@ -33,7 +33,14 @@ typedef void* mbgl_layer_t;
 
 /* ── Callbacks ─────────────────────────────────────────────────────────────── */
 typedef void (*mbgl_render_fn)(void* userdata);
-typedef void (*mbgl_map_observer_fn)(const char* event_name, void* userdata);
+/** Observer callback fired for named map lifecycle events.
+ *  @param event_name  Camel-case event name matching the MapObserver virtual method
+ *                     (e.g. "onDidFinishLoadingStyle", "onDidBecomeIdle").
+ *  @param detail      Optional extra detail: error message for onDidFailLoadingMap,
+ *                     image ID for onStyleImageMissing, source ID for onSourceChanged,
+ *                     "animated" or "immediate" for camera change events, else NULL.
+ *  @param userdata    Opaque pointer passed to mbgl_map_create. */
+typedef void (*mbgl_map_observer_fn)(const char* event_name, const char* detail, void* userdata);
 
 /* ── RunLoop ───────────────────────────────────────────────────────────────── */
 MBGL_CABI_API mbgl_runloop_t  mbgl_runloop_create(void);
@@ -83,6 +90,8 @@ MBGL_CABI_API void            mbgl_map_get_center(mbgl_map_t map, double* out_la
 MBGL_CABI_API void            mbgl_map_set_min_zoom(mbgl_map_t map, double zoom);
 MBGL_CABI_API void            mbgl_map_set_max_zoom(mbgl_map_t map, double zoom);
 MBGL_CABI_API void            mbgl_map_trigger_repaint(mbgl_map_t map);
+MBGL_CABI_API void            mbgl_map_cancel_transitions(mbgl_map_t map);
+MBGL_CABI_API int             mbgl_map_is_fully_loaded(mbgl_map_t map);
 
 MBGL_CABI_API void            mbgl_map_on_scroll(mbgl_map_t map, double delta, double cx, double cy);
 MBGL_CABI_API void            mbgl_map_on_double_tap(mbgl_map_t map, double x, double y);
@@ -134,6 +143,21 @@ MBGL_CABI_API void            mbgl_style_add_image(mbgl_style_t st, const char* 
                                                     float pixel_ratio, int sdf,
                                                     const uint8_t* rgba_premultiplied);
 MBGL_CABI_API void            mbgl_style_remove_image(mbgl_style_t st, const char* image_id);
+
+/** Returns the currently loaded style as a JSON string; caller must free with mbgl_free_string(). */
+MBGL_CABI_API char*           mbgl_style_get_json(mbgl_style_t st);
+
+/** Set the global style transition duration and delay (milliseconds). */
+MBGL_CABI_API void            mbgl_style_set_transition(mbgl_style_t st,
+                                                          int64_t duration_ms,
+                                                          int64_t delay_ms);
+
+/** Set a Light property by name using a JSON-encoded value.
+ *  Valid names: "anchor" ("map"|"viewport"), "color" ("#rrggbb"),
+ *               "intensity" (0-1 float), "position" ([radial, azimuthal, polar]). */
+MBGL_CABI_API void            mbgl_style_set_light_property(mbgl_style_t st,
+                                                              const char* name,
+                                                              const char* value_json);
 
 /* ── Style – additional layer types ─────────────────────────────────────────── */
 MBGL_CABI_API mbgl_layer_t    mbgl_style_add_location_indicator_layer(mbgl_style_t st,

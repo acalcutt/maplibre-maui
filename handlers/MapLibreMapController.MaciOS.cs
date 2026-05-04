@@ -89,6 +89,8 @@ public class MapLibreMapController : IMapLibreMapController
     public event Func<LatLng, bool>?         OnMapLongClickReceived;
     public event Action<Style>?              OnStyleLoadedReceived;
     public event Action<Location>?           OnUserLocationUpdateReceived;
+    public event Action<string>?             OnDidFailLoadingMapReceived;
+    public event Action<string>?             OnStyleImageMissingReceived;
 
     // -- Construction ----------------------------------------------------------
 
@@ -158,7 +160,7 @@ public class MapLibreMapController : IMapLibreMapController
         });
     }
 
-    private void OnMapObserverEvent(string eventName)
+    private void OnMapObserverEvent(string eventName, string? detail)
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
@@ -177,6 +179,12 @@ public class MapLibreMapController : IMapLibreMapController
                     break;
                 case "onCameraDidChange":
                     OnCameraIdleReceived?.Invoke();
+                    break;
+                case "onDidFailLoadingMap":
+                    OnDidFailLoadingMapReceived?.Invoke(detail ?? string.Empty);
+                    break;
+                case "onStyleImageMissing":
+                    OnStyleImageMissingReceived?.Invoke(detail ?? string.Empty);
                     break;
             }
         });
@@ -400,6 +408,8 @@ public class MapLibreMapController : IMapLibreMapController
     public void FlyTo(double latitude, double longitude, double zoom,
         double bearing = 0, double pitch = 0, long durationMs = 500)
         => _map?.FlyTo(latitude, longitude, zoom, bearing, pitch, durationMs);
+
+    public void CancelTransitions() => _map?.CancelTransitions();
 
     public double GetZoom()    => _map?.Zoom    ?? 0;
     public double GetBearing() => _map?.Bearing ?? 0;

@@ -2,6 +2,7 @@
  * MbglStyle.cs — Typed wrapper around mbgl_style_t (non-owning, valid for the
  * lifetime of its parent MbglMap).
  */
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace Maui.MapLibre.Native;
@@ -94,6 +95,34 @@ public sealed class MbglStyle
 
     public void RemoveImage(string imageId)
         => NativeMethods.StyleRemoveImage(Handle, imageId);
+
+    // ── Style-level properties ──────────────────────────────────────────────────────────────
+
+    /// <summary>Returns the currently loaded style as a JSON string.</summary>
+    public string GetJson()
+    {
+        var ptr = NativeMethods.StyleGetJson(Handle);
+        if (ptr == IntPtr.Zero) return string.Empty;
+        var result = Marshal.PtrToStringUTF8(ptr) ?? string.Empty;
+        NativeMethods.FreeString(ptr);
+        return result;
+    }
+
+    /// <summary>Set the global transition duration and optional delay for all animated
+    /// style property changes.</summary>
+    public void SetTransition(long durationMs, long delayMs = 0)
+        => NativeMethods.StyleSetTransition(Handle, durationMs, delayMs);
+
+    /// <summary>Set a Light property by name using a JSON-encoded value.
+    /// Valid names: <c>"anchor"</c> (<c>"map"</c>|<c>"viewport"</c>),
+    /// <c>"color"</c> (hex string), <c>"intensity"</c> (0–1),
+    /// <c>"position"</c> ([radial, azimuthal, polar]).</summary>
+    public void SetLightProperty(string name, string valueJson)
+        => NativeMethods.StyleSetLightProperty(Handle, name, valueJson);
+
+    /// <summary>Set a Light property, serializing the value from a C# object.</summary>
+    public void SetLightProperty(string name, object? value)
+        => SetLightProperty(name, JsonSerializer.Serialize(value));
 }
 
 // ── Source handle ─────────────────────────────────────────────────────────────
