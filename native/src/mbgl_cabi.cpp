@@ -86,7 +86,7 @@ public:
     }
     void onWillStartLoadingMap()  override { fire("onWillStartLoadingMap"); }
     void onDidFinishLoadingMap()  override { fire("onDidFinishLoadingMap"); }
-    void onDidFailLoadingMap(MapLoadError /*err*/, const std::string& msg) override {
+    void onDidFailLoadingMap(mbgl::MapLoadError /*err*/, const std::string& msg) override {
         fire("onDidFailLoadingMap", msg.c_str());
     }
     void onWillStartRenderingFrame() override { fire("onWillStartRenderingFrame"); }
