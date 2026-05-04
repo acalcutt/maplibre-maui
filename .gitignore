@@ -16,6 +16,9 @@
 # Mono auto generated files
 mono_crash.*
 
+# Native build artifacts (populated by CI workflows; not committed)
+bindings/native/
+
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/

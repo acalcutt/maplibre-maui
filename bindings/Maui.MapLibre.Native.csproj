@@ -38,18 +38,30 @@
     <_MbglNativeDir Condition="'$(_MbglNativeDir)' == ''">$(MSBuildThisFileDirectory)native\</_MbglNativeDir>
   </PropertyGroup>
 
-  <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+  <!--
+    Pack items MUST be in an unconditional ItemGroup.
+    NuGet evaluates Pack=true items during the outer build where TargetFramework is
+    empty, so any TFM condition (GetTargetPlatformIdentifier == 'windows') evaluates
+    false and the DLL is silently excluded. Use only file-existence conditions here.
+  -->
+  <ItemGroup>
     <None Include="$(_MbglNativeDir)win-x64\mbgl-cabi.dll"
           Condition="Exists('$(_MbglNativeDir)win-x64\mbgl-cabi.dll')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Pack>true</Pack>
       <PackagePath>runtimes/win-x64/native</PackagePath>
     </None>
     <None Include="$(_MbglNativeDir)win-arm64\mbgl-cabi.dll"
           Condition="Exists('$(_MbglNativeDir)win-arm64\mbgl-cabi.dll')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Pack>true</Pack>
       <PackagePath>runtimes/win-arm64/native</PackagePath>
+    </None>
+  </ItemGroup>
+
+  <!-- CopyToOutputDirectory only applies when actually building for Windows -->
+  <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+    <None Include="$(_MbglNativeDir)win-x64\mbgl-cabi.dll"
+          Condition="Exists('$(_MbglNativeDir)win-x64\mbgl-cabi.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 
