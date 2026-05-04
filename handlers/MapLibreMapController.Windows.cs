@@ -381,6 +381,9 @@ public class MapLibreMapController : IMapLibreMapController
 
     public void SetStyleString(string styleString)
     {
+        // Always update _styleString so InitMaplibre() picks it up if called after
+        // the property mapper fires (which happens before View.Loaded).
+        _styleString = styleString;
         if (_map == null) return;
         if (styleString.StartsWith('{'))
             _map.SetStyleJson(styleString);
