@@ -2,7 +2,10 @@
 
 ## master
 ### ✨ Features and improvements
-- _...Add new stuff here..._
+- Camera operations exposed on `IMapLibreMapController`: `FlyTo`, `EaseTo`, `JumpTo` (bearing + pitch), `SetCameraTargetBounds` (min/max zoom + pitch)
+- Camera read-back: `GetZoom()`, `GetBearing()`, `GetPitch()`, `GetCenter()`
+- Projection helpers: `LatLngToScreenPoint`, `ScreenPointToLatLng`
+- Queries: `QueryRenderedFeaturesAtPoint`, `QueryRenderedFeaturesInBox` (returns GeoJSON FeatureCollection string)
 
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
@@ -17,13 +20,10 @@
 - Android frontend: EGL surface + `ANativeWindow` via JNI, backed by `SurfaceView`
 - iOS / macCatalyst frontend: Metal via `MTKView` (owned by C++ backend, inserted as UIKit subview)
 - Windows frontend: OpenGL 3.2 core context via `wglCreateContextAttribsARB`, child HWND render target
-- Camera: `flyTo`, `easeTo`, `jumpTo` (bearing + pitch), `setBounds`, `cameraForBounds`
+- Camera: `flyTo`, `easeTo`, `jumpTo` (bearing + pitch), `setBounds`, `cameraForBounds` (C ABI level)
 - Style: `addImage` / `removeImage` (sprite images), `setProjectionMode` (axonometric)
 - Layers: fill, line, circle, symbol, raster, heatmap, hillshade, fill-extrusion, background, location-indicator, color-relief
 - Sources: GeoJSON (inline + URL), vector, raster, raster-DEM, image
-- Queries: `queryRenderedFeaturesAtPoint`, `queryRenderedFeaturesInBox` (returns GeoJSON FeatureCollection string)
-- Projection helpers: `pixelForLatLng`, `latLngForPixel`
-- Camera read-back: `GetZoom()`, `GetBearing()`, `GetPitch()`, `GetCenter()`
 - Multi-target NuGet packages: `net9.0-android`, `net9.0-ios`, `net9.0-maccatalyst`, `net9.0-windows10.0.19041.0`
 - GitHub Actions CI with per-platform native builds (Windows x64/arm64, Android arm64/x86_64, iOS arm64, macCatalyst) and NuGet packaging on `macos-15`
 - BSD 2-Clause license (matching maplibre-native)
