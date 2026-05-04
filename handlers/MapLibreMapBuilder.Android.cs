@@ -1,5 +1,3 @@
-using Maui.MapLibre.Handlers.Geometry;
-
 namespace Maui.MapLibre.Handlers;
 
 public partial class MapLibreMapBuilder : IMapLibreMapOptionsSink
@@ -10,7 +8,6 @@ public partial class MapLibreMapBuilder : IMapLibreMapOptionsSink
         => new MapLibreMapController(pixelRatio, _styleString);
 
     public void SetStyleString(string styleString)         { _styleString = styleString; }
-    public void SetCameraTargetBounds(LatLngBounds bounds) { }
     public void SetCompassEnabled(bool v)                  { }
     public void SetMinMaxZoomPreference(double? min, double? max) { }
     public void SetRotateGesturesEnabled(bool v)           { }

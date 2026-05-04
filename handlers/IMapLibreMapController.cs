@@ -112,6 +112,33 @@ public interface IMapLibreMapController : IMapLibreMapOptionsSink
     
     public void RemoveLayer(string layerId);
 
-    // Camera
-    public void JumpTo(double latitude, double longitude, double zoom);
+    // Camera – movement
+    public void JumpTo(double latitude, double longitude, double zoom,
+        double bearing = 0, double pitch = 0);
+
+    public void EaseTo(double latitude, double longitude, double zoom,
+        double bearing = 0, double pitch = 0, long durationMs = 300);
+
+    public void FlyTo(double latitude, double longitude, double zoom,
+        double bearing = 0, double pitch = 0, long durationMs = 500);
+
+    // Camera – constraints
+    public void SetCameraTargetBounds(LatLngBounds bounds,
+        double minZoom = double.NaN, double maxZoom = double.NaN,
+        double minPitch = double.NaN, double maxPitch = double.NaN);
+
+    // Camera – read state
+    public double GetZoom();
+    public double GetBearing();
+    public double GetPitch();
+    public LatLng GetCenter();
+
+    // Projection
+    public (double X, double Y) LatLngToScreenPoint(double latitude, double longitude);
+    public LatLng ScreenPointToLatLng(double x, double y);
+
+    // Feature queries
+    public string? QueryRenderedFeaturesAtPoint(double x, double y, string? layerIds = null);
+    public string? QueryRenderedFeaturesInBox(double x1, double y1, double x2, double y2,
+        string? layerIds = null);
 }

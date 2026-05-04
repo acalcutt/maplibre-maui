@@ -4,9 +4,6 @@ namespace Maui.MapLibre.Handlers;
 
 public interface IMapLibreMapOptionsSink
 {
-    // todo: dddd replace with CameraPosition.Builder target
-    void SetCameraTargetBounds(LatLngBounds bounds);
-
     void SetCompassEnabled(bool compassEnabled);
 
     // TODO: styleString is not actually a part of options. consider moving

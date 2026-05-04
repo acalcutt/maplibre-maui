@@ -165,7 +165,14 @@ public class MapLibreMapController : IMapLibreMapController
         if (max.HasValue) _map?.SetMaxZoom(max.Value);
     }
 
-    public void SetCameraTargetBounds(LatLngBounds bounds)    { }
+    public void SetCameraTargetBounds(LatLngBounds bounds,
+        double minZoom = double.NaN, double maxZoom = double.NaN,
+        double minPitch = double.NaN, double maxPitch = double.NaN)
+    {
+        _map?.SetBounds(bounds.SouthWest.Latitude, bounds.SouthWest.Longitude,
+                        bounds.NorthEast.Latitude, bounds.NorthEast.Longitude,
+                        minZoom, maxZoom, minPitch, maxPitch);
+    }
     public void SetCompassEnabled(bool v)                     { }
     public void SetRotateGesturesEnabled(bool v)              { }
     public void SetScrollGesturesEnabled(bool v)              { }
@@ -350,8 +357,44 @@ public class MapLibreMapController : IMapLibreMapController
 
     // -- Camera ----------------------------------------------------------------
 
-    public void JumpTo(double latitude, double longitude, double zoom)
-        => _map?.JumpTo(latitude, longitude, zoom, 0, 0);
+    public void JumpTo(double latitude, double longitude, double zoom,
+        double bearing = 0, double pitch = 0)
+        => _map?.JumpTo(latitude, longitude, zoom, bearing, pitch);
+
+    public void EaseTo(double latitude, double longitude, double zoom,
+        double bearing = 0, double pitch = 0, long durationMs = 300)
+        => _map?.EaseTo(latitude, longitude, zoom, bearing, pitch, durationMs);
+
+    public void FlyTo(double latitude, double longitude, double zoom,
+        double bearing = 0, double pitch = 0, long durationMs = 500)
+        => _map?.FlyTo(latitude, longitude, zoom, bearing, pitch, durationMs);
+
+    public double GetZoom()    => _map?.Zoom    ?? 0;
+    public double GetBearing() => _map?.Bearing ?? 0;
+    public double GetPitch()   => _map?.Pitch   ?? 0;
+    public LatLng GetCenter()
+    {
+        if (_map == null) return new LatLng(0, 0);
+        var (lat, lon) = _map.Center;
+        return new LatLng(lat, lon);
+    }
+
+    public (double X, double Y) LatLngToScreenPoint(double latitude, double longitude)
+        => _map?.PixelForLatLng(latitude, longitude) ?? (0, 0);
+
+    public LatLng ScreenPointToLatLng(double x, double y)
+    {
+        if (_map == null) return new LatLng(0, 0);
+        var (lat, lon) = _map.LatLngForPixel(x, y);
+        return new LatLng(lat, lon);
+    }
+
+    public string? QueryRenderedFeaturesAtPoint(double x, double y, string? layerIds = null)
+        => _map?.QueryRenderedFeaturesAtPoint(x, y, layerIds);
+
+    public string? QueryRenderedFeaturesInBox(double x1, double y1, double x2, double y2,
+        string? layerIds = null)
+        => _map?.QueryRenderedFeaturesInBox(x1, y1, x2, y2, layerIds);
 
     // -- Cleanup ---------------------------------------------------------------
 

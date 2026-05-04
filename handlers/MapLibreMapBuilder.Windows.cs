@@ -1,5 +1,4 @@
 #if WINDOWS
-using Maui.MapLibre.Handlers.Geometry;
 
 namespace Maui.MapLibre.Handlers;
 
@@ -26,7 +25,7 @@ public partial class MapLibreMapBuilder : IMapLibreMapOptionsSink
     }
 
     // ── IMapLibreMapOptionsSink stubs ─────────────────────────────────────────
-    public void SetCameraTargetBounds(LatLngBounds bounds)    { }
+
     public void SetCompassEnabled(bool compassEnabled)         { }
     public void SetRotateGesturesEnabled(bool v)               { }
     public void SetScrollGesturesEnabled(bool v)               { }
