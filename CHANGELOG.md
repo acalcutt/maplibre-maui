@@ -2,6 +2,13 @@
 
 ## master
 ### ✨ Features and improvements
+- _...Add new stuff here..._
+
+### 🐞 Bug fixes
+- _...Add new stuff here..._
+
+## 1.1.0
+### ✨ Features and improvements
 - Camera operations exposed on `IMapLibreMapController`: `FlyTo`, `EaseTo`, `JumpTo` (bearing + pitch), `SetCameraTargetBounds` (min/max zoom + pitch)
 - Camera read-back: `GetZoom()`, `GetBearing()`, `GetPitch()`, `GetCenter()`
 - Projection helpers: `LatLngToScreenPoint`, `ScreenPointToLatLng`
@@ -23,7 +30,6 @@
 
 ### 🐞 Bug fixes
 - Memory leak in `mbgl_map_destroy`: `frontend.release()` → `frontend.reset()`
-- _...Add new stuff here..._
 
 
 ## 1.0.0
