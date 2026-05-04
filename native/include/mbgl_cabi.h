@@ -176,7 +176,9 @@ MBGL_CABI_API mbgl_source_t   mbgl_style_get_source(mbgl_style_t st, const char*
 MBGL_CABI_API char*           mbgl_layer_get_paint_property(mbgl_layer_t layer, const char* name);
 MBGL_CABI_API char*           mbgl_layer_get_layout_property(mbgl_layer_t layer, const char* name);
 /** Returns 1 if visible, 0 if none. */
-MBGL_CABI_API int             mbgl_layer_get_visibility(mbgl_layer_t layer);(mbgl_map_t map, double delta, double cx, double cy);
+MBGL_CABI_API int             mbgl_layer_get_visibility(mbgl_layer_t layer);
+
+MBGL_CABI_API void            mbgl_map_on_scroll(mbgl_map_t map, double delta, double cx, double cy);
 MBGL_CABI_API void            mbgl_map_on_double_tap(mbgl_map_t map, double x, double y);
 MBGL_CABI_API void            mbgl_map_on_pan_start(mbgl_map_t map, double x, double y);
 MBGL_CABI_API void            mbgl_map_on_pan_move(mbgl_map_t map, double dx, double dy);
