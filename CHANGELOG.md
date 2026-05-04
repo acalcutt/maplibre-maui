@@ -31,7 +31,6 @@
 ### 🐞 Bug fixes
 - Memory leak in `mbgl_map_destroy`: `frontend.release()` → `frontend.reset()`
 
-
 ## 1.0.0
 
 ### ✨ Features and improvements
