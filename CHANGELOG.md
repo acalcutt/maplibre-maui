@@ -8,9 +8,8 @@
 - _...Add new stuff here..._
 
 ## 1.1.1
-### ✨ Features and improvements
-
 ### 🐞 Bug fixes
+- Fixed native DLLs missing from NuGet package: `Pack=true` / `PackagePath` items were inside a TFM-conditioned `ItemGroup` that NuGet silently skips during the outer (multi-targeting) build pass. Moved those declarations to an unconditional `ItemGroup`; `CopyToOutputDirectory` remains TFM-conditioned for local builds. `runtimes/win-x64/native/mbgl-cabi.dll` and `runtimes/win-arm64/native/mbgl-cabi.dll` are now correctly included in `Maui.MapLibre.Native`.
 
 ## 1.1.0
 ### ✨ Features and improvements
