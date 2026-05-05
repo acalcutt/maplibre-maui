@@ -447,7 +447,13 @@ public class MapLibreMapController : IMapLibreMapController
     {
         _style    = null;
         _map?.Dispose();      _map      = null;
+        // Drain pending libuv tasks scheduled by Map destruction before tearing
+        // down the frontend / renderer (avoids use-after-free of the renderer
+        // by in-flight async tile / glyph completions). Mirrors the Windows
+        // controller teardown order.
+        for (int i = 0; i < 8 && _runLoop != null; i++) _runLoop.RunOnce();
         _frontend?.Dispose(); _frontend = null;
+        for (int i = 0; i < 4 && _runLoop != null; i++) _runLoop.RunOnce();
         _runLoop?.Dispose();  _runLoop  = null;
 
         if (_nativeWindow != IntPtr.Zero)

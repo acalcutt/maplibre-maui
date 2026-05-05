@@ -7,6 +7,18 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
+## 1.1.2
+### ✨ Features and improvements
+- **Windows: map now renders correctly inside .NET MAUI / WinUI 3 windows.** WinUI 3 composes its XAML content via DirectComposition on top of a `Microsoft.UI.Content.DesktopChildSiteBridge` HWND, which obscures any plain `WS_CHILD` HWND parented inside the window (the well-known "airspace" issue). The Windows controller now creates a borderless top-level popup window (`WS_POPUP | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW`) owned by the main XAML window and tracks its position via `TransformToVisual` + `ClientToScreen` against the discovered XAML bridge HWND. The popup renders above the DComp surface, so the GL content is actually visible.
+- **Windows: libuv runloop is now pumped on the UI thread** via a 16 ms `DispatcherTimer`. This unblocks asynchronous HTTP callbacks for style / sprite / glyph / tile downloads — previously requests were issued but their completions never fired, so styles never finished loading.
+- **Windows: render scheduling is now coalesced** through the dispatcher tick. `OnRender` only marks the frontend dirty; the render itself (`wglMakeCurrent` → `glBindFramebuffer(0)` → `glViewport` → `glClear` → `frontend.Render()` → `SwapBuffers`) runs on the next tick. This avoids re-entrant rendering during MAUI layout passes.
+- **Windows: XAML island HWND is now discovered via `EnumChildWindows`**, looking for class names containing `ContentBridge` or `DesktopChildSiteBridge`. The previous approach via `XamlRoot.ContentIslandEnvironment.AppWindowId` returned the top-level window on current Windows App SDK builds, which produced incorrect screen coordinates.
+
+### 🐞 Bug fixes
+- **GL backends: `updateAssumedState()` now resyncs mbgl's GL state cache** by calling `assumeFramebufferBinding(ImplicitFramebufferBinding)` and `assumeViewport(0, 0, size)` — applied to both the Windows (WGL) and Android (EGL) C++ frontends, matching the Apple/Metal frontend in this project and the Qt / GLFW / MaplibreNative.NET-ac WGL backends. Previously these were empty no-ops, so when the surrounding host code mutated framebuffer / viewport state between frames (e.g. clearing the default framebuffer to a background color), mbgl's internal cache thought its bindings were still current and skipped re-binding — producing missing fills, missing labels, and dropped draw calls.
+- **All platforms: heap corruption / use-after-free on shutdown** mitigated by tightening teardown order in every controller (`Windows`, `Android`, `MaciOS`): null `_style` → dispose `_map` → drain the libuv runloop several times → dispose `_frontend` → drain the runloop again → dispose `_runLoop`. Previously the frontend/renderer was destroyed while libuv-scheduled tile/glyph completions were still in flight, which on Windows produced `0xc0000374` heap corruption.
+- **Windows: `mbgl-cabi.dll` is now copied next to the executable** for `ProjectReference` consumers. The DLL was previously only flowed via NuGet `runtimes/win-x64/native/`, so apps that consumed the handlers/bindings directly via `ProjectReference` (e.g. for local development) failed to load with `0x8007007E`.
+
 ## 1.1.1
 ### 🐞 Bug fixes
 - Fixed native DLLs missing from NuGet package: `Pack=true` / `PackagePath` items were inside a TFM-conditioned `ItemGroup` that NuGet silently skips during the outer (multi-targeting) build pass. Moved those declarations to an unconditional `ItemGroup`; `CopyToOutputDirectory` remains TFM-conditioned for local builds. `runtimes/win-x64/native/mbgl-cabi.dll` and `runtimes/win-arm64/native/mbgl-cabi.dll` are now correctly included in `Maui.MapLibre.Native`.

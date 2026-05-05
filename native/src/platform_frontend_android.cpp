@@ -68,7 +68,15 @@ protected:
     mbgl::gl::ProcAddress getExtensionFunctionPointer(const char* name) override {
         return reinterpret_cast<mbgl::gl::ProcAddress>(eglGetProcAddress(name));
     }
-    void updateAssumedState() override {}
+    // Re-sync mbgl's cached GL state so it re-binds framebuffer/viewport
+    // each frame. Mirrors the Apple/Metal backend in this project, the Qt
+    // GL backend and GLFW. Important on Android because the SurfaceView
+    // can be recreated under us (config change, surface destroyed) and
+    // mbgl's cache must not be trusted across context activations.
+    void updateAssumedState() override {
+        assumeFramebufferBinding(ImplicitFramebufferBinding);
+        assumeViewport(0, 0, size);
+    }
 
 private:
     EGLDisplay _display = EGL_NO_DISPLAY;

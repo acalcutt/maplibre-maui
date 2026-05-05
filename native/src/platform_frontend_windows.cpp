@@ -50,7 +50,19 @@ protected:
     mbgl::gl::ProcAddress getExtensionFunctionPointer(const char* name) override {
         return reinterpret_cast<mbgl::gl::ProcAddress>(wglGetProcAddress(name));
     }
-    void updateAssumedState() override {}
+    // Re-sync mbgl's cached GL state to match what is actually current on the
+    // context. This is important because the host (.NET MAUI controller) may
+    // mutate framebuffer binding / viewport / clear state between frames
+    // (e.g. clearing the default framebuffer to a background color before
+    // mbgl's own renderer kicks in). Without this, mbgl's internal state
+    // cache thinks its bindings are already current and skips re-binding,
+    // producing missing fills / labels / draw calls.
+    //
+    // Mirrors the Qt and MaplibreNative.NET-ac WGL backends.
+    void updateAssumedState() override {
+        assumeFramebufferBinding(ImplicitFramebufferBinding);
+        assumeViewport(0, 0, size);
+    }
 
 private:
     HDC   _hDC;
