@@ -456,6 +456,7 @@ public class MapLibreMapController : IMapLibreMapController
         _renderNeedsUpdate = true;
 
         _initialized = true;
+        ShowOverlays();  // re-evaluate now that _initialized is true
         System.Diagnostics.Debug.WriteLine(
             $"[MapLibre.Win] TryInitialize done. childHwnd=0x{_childHwnd.ToInt64():X} " +
             $"size={physW}x{physH} pixelRatio={_pixelRatio} visible={IsWindowVisible(_childHwnd)}");
