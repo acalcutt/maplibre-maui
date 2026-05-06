@@ -39,6 +39,12 @@ public sealed class MbglMap : IDisposable
 
         if (Handle == IntPtr.Zero)
             throw new InvalidOperationException("mbgl_map_create returned null.");
+
+        // mbgl_map_create transfers ownership of the frontend pointer into the
+        // native CabiMap struct. Calling mbgl_frontend_destroy afterwards would
+        // be a double-free (0xc0000374 heap corruption). Zero the C# handle so
+        // MbglFrontend.Dispose() becomes a no-op from this point forward.
+        frontend.TransferOwnership();
     }
 
     public void SetStyleUrl(string url)  => NativeMethods.MapSetStyleUrl(Handle, url);

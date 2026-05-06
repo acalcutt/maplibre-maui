@@ -5,10 +5,26 @@ using System.Runtime.InteropServices;
 
 namespace Maui.MapLibre.Native;
 
-/// <summary>Wraps <c>mbgl_frontend_t*</c>. Dispose after the <see cref="MbglMap"/>.</summary>
+/// <summary>
+/// Wraps <c>mbgl_frontend_t*</c>.
+/// <para>
+/// <b>Ownership note:</b> once passed to <see cref="MbglMap"/>, the map takes
+/// ownership of the underlying native pointer and will destroy it via
+/// <c>mbgl_map_destroy</c>. <see cref="Dispose"/> becomes a no-op after
+/// <see cref="TransferOwnership"/> is called. Do <em>not</em> call
+/// <see cref="Dispose"/> after <see cref="MbglMap.Dispose"/>.
+/// </para>
+/// </summary>
 public sealed class MbglFrontend : IDisposable
 {
     internal IntPtr Handle { get; private set; }
+
+    /// <summary>
+    /// Zeros the native handle, marking it as owned by the <see cref="MbglMap"/>.
+    /// Called automatically by the <see cref="MbglMap"/> constructor.
+    /// Subsequent calls to <see cref="Dispose"/> become no-ops.
+    /// </summary>
+    internal void TransferOwnership() => Handle = IntPtr.Zero;
 
     // Prevent the delegate from being collected
     private readonly NativeMethods.RenderFn _renderDelegate;

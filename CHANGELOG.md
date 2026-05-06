@@ -7,6 +7,10 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
+## 1.1.4
+### 🐞 Bug fixes
+- **All platforms: fixed heap corruption / `0xc0000374` crash on page navigation (double-free of the frontend native object).** `mbgl_map_create` transfers ownership of the `mbgl_frontend_t*` pointer into the internal `CabiMap` struct, so `mbgl_map_destroy` already destroys the frontend C++ object. The controllers were additionally calling `mbgl_frontend_destroy` on the already-freed pointer, causing a double-free on every normal teardown path. Fixed by adding `MbglFrontend.TransferOwnership()` (zeroes the handle), called from the `MbglMap` constructor immediately after `mbgl_map_create` succeeds. `MbglFrontend.Dispose()` is now a safe no-op after ownership transfer. All three controllers (Windows, Android, MaciOS) updated to not call `_frontend.Dispose()` after `_map.Dispose()`.
+
 ## 1.1.3
 ### 🐞 Bug fixes
 - **Windows: crash / heap corruption on page navigation now fixed via `DisconnectHandler` override.** Added `DisconnectHandler(Grid)` to `MapLibreMapHandler` (Windows) that calls `controller.Shutdown()` and unhooks all input events before letting MAUI disconnect the platform view. Previously, MAUI's navigation system could call `DisconnectHandler` in patterns where the WinUI `Unloaded` event fires asynchronously or is skipped (e.g. Shell tab switches), leaving the 16 ms dispatcher timer running and calling into already-freed native GL/mbgl objects.

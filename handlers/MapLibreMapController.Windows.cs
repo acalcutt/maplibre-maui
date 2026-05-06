@@ -816,12 +816,15 @@ public class MapLibreMapController : IMapLibreMapController
 
         _style    = null;
         _map?.Dispose();      _map      = null;
-        // Drain any cancellation callbacks queued by ~Map() onto the libuv loop
-        // before destroying the loop itself — prevents 0xc0000374 heap corruption
-        // from late tile/style download completions firing into freed memory.
+        // Drain any callbacks queued by ~Map() onto the libuv loop.
         try { for (int i = 0; i < 8; i++) _runLoop?.RunOnce(); } catch { }
-        _frontend?.Dispose(); _frontend = null;
-        try { for (int i = 0; i < 4; i++) _runLoop?.RunOnce(); } catch { }
+        // NOTE: do NOT call _frontend.Dispose() here. mbgl_map_create transfers
+        // ownership of the frontend pointer into the native CabiMap struct, so
+        // mbgl_map_destroy already destroyed the frontend C++ object. Calling
+        // mbgl_frontend_destroy afterwards would be a double-free → 0xc0000374.
+        // MbglMap.ctor calls frontend.TransferOwnership() which zeroes the handle,
+        // so Dispose() is already a no-op — but we skip it here for clarity.
+        _frontend = null;
         _runLoop?.Dispose();  _runLoop  = null;
 
         if (_hGLRC != IntPtr.Zero)
