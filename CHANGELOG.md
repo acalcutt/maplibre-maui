@@ -7,6 +7,11 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
+## 1.1.8
+### 🐞 Bug fixes
+- **Windows: nav overlay now visible on first load.** `CreateOverlays()` called `ShowOverlays()` before `_initialized` was set to `true`, so the visibility guard hid the nav panel immediately after creating it. Fixed by calling `ShowOverlays()` once more after `_initialized = true` at the end of `TryInitialize()`.
+- **Windows: touchpad pinch-to-zoom no longer crashes and now zooms correctly.** Two bugs: (1) `ManipulationMode = Scale | TranslateX | TranslateY` triggers an arithmetic overflow inside WinUI 3's manipulation tracker. Fixed by using `ManipulationModes.Scale` only — pan is already handled by the popup HWND's `WM_LBUTTONDOWN`/`WM_MOUSEMOVE` WndProc. (2) `ManipulationDelta.Scale` is an incremental per-frame ratio (e.g. 1.01×), but `mbgl_map_on_pinch` expects a cumulative scale factor from gesture start. Fixed by accumulating into `_pinchCumulativeScale`, reset on `ManipulationStarted`/`ManipulationCompleted`.
+
 ## 1.1.7
 ### ✨ Features and improvements
 - **`mbgl_source_get_attribution()`** added to the C ABI: reads `Source::getAttribution()` (populated from TileJSON metadata) and returns a caller-owned string.
