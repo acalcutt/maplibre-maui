@@ -40,5 +40,7 @@ public partial class MapLibreMapBuilder : IMapLibreMapOptionsSink
     public void SetCompassViewMargins(int x, int y)            { }
     public void SetAttributionButtonGravity(int gravity)       { }
     public void SetAttributionButtonMargins(int x, int y)      { }
+    public void SetShowNavigationControls(bool show)            { }
+    public void SetShowAttributionControl(bool show, string? customAttribution) { }
 }
 #endif
