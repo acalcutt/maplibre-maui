@@ -8,6 +8,9 @@
 - _...Add new stuff here..._
 
 ## 1.1.8
+### ✨ Features and improvements
+- **`ShowNavigationControls` now defaults to `false`** (opt-in, consistent with maplibre-gl-js where `NavigationControl` must be explicitly added). Set `ShowNavigationControls="True"` in your `MapLibreMap` to enable the overlay.
+
 ### 🐞 Bug fixes
 - **Windows: nav overlay now visible on first load.** `CreateOverlays()` called `ShowOverlays()` before `_initialized` was set to `true`, so the visibility guard hid the nav panel immediately after creating it. Fixed by calling `ShowOverlays()` once more after `_initialized = true` at the end of `TryInitialize()`.
 - **Windows: touchpad pinch-to-zoom no longer crashes and now zooms correctly.** Two bugs: (1) `ManipulationMode = Scale | TranslateX | TranslateY` triggers an arithmetic overflow inside WinUI 3's manipulation tracker. Fixed by using `ManipulationModes.Scale` only — pan is already handled by the popup HWND's `WM_LBUTTONDOWN`/`WM_MOUSEMOVE` WndProc. (2) `ManipulationDelta.Scale` is an incremental per-frame ratio (e.g. 1.01×), but `mbgl_map_on_pinch` expects a cumulative scale factor from gesture start. Fixed by accumulating into `_pinchCumulativeScale`, reset on `ManipulationStarted`/`ManipulationCompleted`.
@@ -16,7 +19,7 @@
 ### ✨ Features and improvements
 - **`mbgl_source_get_attribution()`** added to the C ABI: reads `Source::getAttribution()` (populated from TileJSON metadata) and returns a caller-owned string.
 - **`MbglStyle.GetSourceAttributions()`** — iterates all loaded style sources and returns unique, non-empty attribution strings. Foundation for OSM-compliant attribution display.
-- **`MapLibreMap.ShowNavigationControls`** (default `true`) and **`MapLibreMap.ShowAttributionControl`** (default `true`) bindable properties added, plus **`MapLibreMap.CustomAttribution`** for app-supplied attribution text.
+- **`MapLibreMap.ShowNavigationControls`** (default `false`) and **`MapLibreMap.ShowAttributionControl`** (default `true`) bindable properties added, plus **`MapLibreMap.CustomAttribution`** for app-supplied attribution text.
 - **Windows: navigation overlay** — two extra `WS_POPUP` HWNDs are created alongside the GL popup after `TryInitialize`. The *nav overlay* (top-right, 29×90 px) paints zoom-in (+), zoom-out (−) and compass/reset-north (↑) buttons using GDI. Clicking calls `EaseTo(zoom±1)` and `EaseTo(bearing:0)`. The *attribution overlay* (bottom-right) is a `WS_EX_LAYERED` popup (92% alpha) that always shows the concatenated TileJSON source attributions as plain text, refreshed on every `StyleLoaded` event. HTML `<a>` tags are stripped to plain text. Both overlays track the GL popup position via `UpdateChildWindowPosition()` and are destroyed safely in `DisposeNative()`. Android/iOS stubs added (`SetShowNavigationControls`/`SetShowAttributionControl` no-ops); full platform implementations planned.
 
 ## 1.1.6
