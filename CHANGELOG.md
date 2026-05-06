@@ -7,6 +7,10 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
+## 1.1.3
+### 🐞 Bug fixes
+- **Windows: crash / heap corruption on page navigation now fixed via `DisconnectHandler` override.** Added `DisconnectHandler(Grid)` to `MapLibreMapHandler` (Windows) that calls `controller.Shutdown()` and unhooks all input events before letting MAUI disconnect the platform view. Previously, MAUI's navigation system could call `DisconnectHandler` in patterns where the WinUI `Unloaded` event fires asynchronously or is skipped (e.g. Shell tab switches), leaving the 16 ms dispatcher timer running and calling into already-freed native GL/mbgl objects.
+
 ## 1.1.2
 ### ✨ Features and improvements
 - **Windows: map now renders correctly inside .NET MAUI / WinUI 3 windows.** WinUI 3 composes its XAML content via DirectComposition on top of a `Microsoft.UI.Content.DesktopChildSiteBridge` HWND, which obscures any plain `WS_CHILD` HWND parented inside the window (the well-known "airspace" issue). The Windows controller now creates a borderless top-level popup window (`WS_POPUP | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW`) owned by the main XAML window and tracks its position via `TransformToVisual` + `ClientToScreen` against the discovered XAML bridge HWND. The popup renders above the DComp surface, so the GL content is actually visible.

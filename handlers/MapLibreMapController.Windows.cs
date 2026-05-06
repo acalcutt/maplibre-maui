@@ -790,6 +790,12 @@ public class MapLibreMapController : IMapLibreMapController
 
     // ── Cleanup ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Public entry point called by <see cref="MapLibreMapHandler"/> from its
+    /// <c>DisconnectHandler</c> override. Idempotent — safe to call more than once.
+    /// </summary>
+    public void Shutdown() => DisposeNative();
+
     private void DisposeNative()
     {
         // Stop the pump FIRST so no tick can run after native objects are freed

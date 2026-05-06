@@ -161,6 +161,29 @@ public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Microsoft.UI.
     public void UpdateAttributionButtonGravity(int gravity) => _controller.SetAttributionButtonGravity(gravity);
     public void UpdateAttributionButtonMargins(int?[]? margin) { if (margin?.Length >= 2 && margin[0] != null && margin[1] != null) _controller.SetAttributionButtonMargins(margin[0]!.Value, margin[1]!.Value); }
 
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override void DisconnectHandler(Microsoft.UI.Xaml.Controls.Grid platformView)
+    {
+        // Shutdown the GL popup and native mbgl resources BEFORE base removes the
+        // platform view from the visual tree. This guarantees the dispatcher timer
+        // is stopped and the HWND is destroyed even in navigation patterns where
+        // the XAML Unloaded event fires asynchronously or is skipped entirely
+        // (e.g. Shell tab switches on WinUI 3 with some MAUI versions).
+        _controller.Shutdown();
+
+        // Unhook input events so they can't fire after the controller is gone.
+        platformView.PointerWheelChanged -= OnPointerWheelChanged;
+        platformView.PointerPressed      -= OnPointerPressed;
+        platformView.PointerMoved        -= OnPointerMoved;
+        platformView.PointerReleased     -= OnPointerReleased;
+        platformView.PointerCanceled     -= OnPointerCanceled;
+        platformView.DoubleTapped        -= OnDoubleTapped;
+        platformView.ManipulationDelta   -= OnManipulationDelta;
+
+        base.DisconnectHandler(platformView);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
 
