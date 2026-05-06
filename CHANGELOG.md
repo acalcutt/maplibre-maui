@@ -7,6 +7,10 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
+## 1.1.6
+### ✨ Features and improvements
+- **Windows: mouse pan, scroll-wheel zoom, and double-click zoom now work.** The GL render target is a top-level popup window (the WinUI 3 airspace workaround introduced in 1.1.2), which sits above the XAML compositor and intercepts all Win32 mouse messages before WinUI/MAUI sees them. Previously the MAUI pointer events wired on the placeholder `Grid` never fired over the map area. Fixed by subclassing the popup HWND's `WndProc` via `SetWindowLongPtr(GWLP_WNDPROC)` to handle `WM_LBUTTONDOWN` / `WM_MOUSEMOVE` / `WM_LBUTTONUP` / `WM_MOUSEWHEEL` / `WM_LBUTTONDBLCLK` directly in the controller and forwarding them to the existing `OnPanStart` / `OnPanMove` / `OnPanEnd` / `OnScroll` / `OnDoubleTap` mbgl camera APIs. The original WndProc is restored before `DestroyWindow` on teardown.
+
 ## 1.1.5
 ### 🐞 Bug fixes
 - **Fixed regression introduced in 1.1.4: null-pointer crash (`ExecutionEngineException`) on first map load.** `MbglFrontend.TransferOwnership()` previously zeroed the native `Handle`, so subsequent `Render()` / `SetSize()` calls passed `IntPtr.Zero` to the native layer, causing an immediate null-dereference crash. Changed `TransferOwnership()` to set a boolean flag instead; `Handle` remains valid throughout the frontend's lifetime. `Dispose()` uses the flag to skip `mbgl_frontend_destroy` (avoiding the double-free fixed in 1.1.4) while still allowing all normal operations to work.

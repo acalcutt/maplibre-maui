@@ -134,6 +134,30 @@ public class MapLibreMapController : IMapLibreMapController
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrA")]
+    private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    [DllImport("user32.dll", EntryPoint = "CallWindowProcA")]
+    private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetCapture(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    private const int GWLP_WNDPROC        = -4;
+    private const uint WM_LBUTTONDOWN     = 0x0201;
+    private const uint WM_LBUTTONUP       = 0x0202;
+    private const uint WM_MOUSEMOVE       = 0x0200;
+    private const uint WM_MOUSEWHEEL      = 0x020A;
+    private const uint WM_LBUTTONDBLCLK   = 0x0203;
+    private const uint WM_RBUTTONDOWN     = 0x0204;
+    private const uint WM_RBUTTONUP       = 0x0205;
+    private const uint WM_RBUTTONDBLCLK   = 0x0206;
+    private const uint MK_LBUTTON         = 0x0001;
+    private const int  WHEEL_DELTA        = 120;
+
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
     private struct WNDCLASSEXA
     {
@@ -182,6 +206,13 @@ public class MapLibreMapController : IMapLibreMapController
     private const string GlWindowClass = "MapLibreCabiGL";
     private static WndProcDelegate? _wndProcKeepAlive;
     private static bool _classRegistered;
+
+    // Per-instance WndProc subclass state
+    private WndProcDelegate? _subclassProc;  // keep-alive reference
+    private IntPtr _origWndProc = IntPtr.Zero;
+    private bool   _dragging;
+    private int    _lastMouseX;
+    private int    _lastMouseY;
 
     private static void EnsureGlWindowClassRegistered()
     {
@@ -309,6 +340,13 @@ public class MapLibreMapController : IMapLibreMapController
             throw new InvalidOperationException("Failed to create GL popup window.");
 
         _effectiveParentHwnd = ownerHwnd;
+
+        // Subclass the popup WndProc so it handles mouse input directly.
+        // The popup sits above the WinUI compositor, so XAML never sees pointer
+        // events over the map area — we must intercept them at the Win32 level.
+        _subclassProc  = PopupWndProc;
+        _origWndProc   = SetWindowLongPtr(_childHwnd, GWLP_WNDPROC,
+            Marshal.GetFunctionPointerForDelegate(_subclassProc));
 
         InitOpenGl(physW, physH);
         InitMaplibre(physW, physH);
@@ -788,6 +826,77 @@ public class MapLibreMapController : IMapLibreMapController
         }
     }
 
+    // ── Popup WndProc (mouse input) ────────────────────────────────────────────
+
+    private IntPtr PopupWndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+        switch (msg)
+        {
+            case WM_LBUTTONDOWN:
+            {
+                SetCapture(hWnd);
+                _dragging  = true;
+                _lastMouseX = (short)(lParam.ToInt32() & 0xFFFF);
+                _lastMouseY = (short)((lParam.ToInt32() >> 16) & 0xFFFF);
+                // Convert physical px → logical for mbgl (it works in physical coords
+                // relative to its own viewport, so pass physical directly).
+                _map?.OnPanStart(_lastMouseX, _lastMouseY);
+                return IntPtr.Zero;
+            }
+            case WM_MOUSEMOVE:
+            {
+                if (!_dragging) break;
+                int x  = (short)(lParam.ToInt32() & 0xFFFF);
+                int y  = (short)((lParam.ToInt32() >> 16) & 0xFFFF);
+                int dx = x - _lastMouseX;
+                int dy = y - _lastMouseY;
+                _lastMouseX = x;
+                _lastMouseY = y;
+                _map?.OnPanMove(dx, dy);
+                _renderNeedsUpdate = true;
+                return IntPtr.Zero;
+            }
+            case WM_LBUTTONUP:
+            {
+                if (_dragging)
+                {
+                    ReleaseCapture();
+                    _dragging = false;
+                    _map?.OnPanEnd();
+                }
+                return IntPtr.Zero;
+            }
+            case WM_LBUTTONDBLCLK:
+            {
+                int x = (short)(lParam.ToInt32() & 0xFFFF);
+                int y = (short)((lParam.ToInt32() >> 16) & 0xFFFF);
+                _map?.OnDoubleTap(x, y);
+                _renderNeedsUpdate = true;
+                return IntPtr.Zero;
+            }
+            case WM_MOUSEWHEEL:
+            {
+                // wParam hi-word is wheel delta; lo-word is key state.
+                // Cursor position is in screen coords in lParam.
+                int delta = (short)((wParam.ToInt32() >> 16) & 0xFFFF);
+                // Convert screen cursor pos → popup client coords.
+                int screenX = (short)(lParam.ToInt32() & 0xFFFF);
+                int screenY = (short)((lParam.ToInt32() >> 16) & 0xFFFF);
+                var pt = new POINT { X = screenX, Y = screenY };
+                // ScreenToClient not available here directly; use popup rect offset.
+                GetWindowRect(hWnd, out var wr);
+                int cx = screenX - wr.Left;
+                int cy = screenY - wr.Top;
+                _map?.OnScroll((double)delta / WHEEL_DELTA, cx, cy);
+                _renderNeedsUpdate = true;
+                return IntPtr.Zero;
+            }
+        }
+        return _origWndProc != IntPtr.Zero
+            ? CallWindowProc(_origWndProc, hWnd, msg, wParam, lParam)
+            : DefWindowProcA(hWnd, msg, wParam, lParam);
+    }
+
     // ── Cleanup ───────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -840,6 +949,14 @@ public class MapLibreMapController : IMapLibreMapController
         }
         if (_childHwnd != IntPtr.Zero)
         {
+            // Restore the original WndProc before destroying the window so no
+            // stale subclass pointer can be called during WM_DESTROY processing.
+            if (_origWndProc != IntPtr.Zero)
+            {
+                SetWindowLongPtr(_childHwnd, GWLP_WNDPROC, _origWndProc);
+                _origWndProc = IntPtr.Zero;
+            }
+            _subclassProc = null;
             DestroyWindow(_childHwnd);
             _childHwnd = IntPtr.Zero;
         }
