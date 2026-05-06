@@ -1231,21 +1231,21 @@ public class MapLibreMapController : IMapLibreMapController
     {
         if (_map == null) return;
         var center = GetCenter();
-        EaseTo(center.Lat, center.Lon, GetZoom() + 1, GetBearing(), GetPitch(), durationMs: 250);
+        EaseTo(center.Latitude, center.Longitude, GetZoom() + 1, GetBearing(), GetPitch(), durationMs: 250);
     }
 
     private void ZoomOut()
     {
         if (_map == null) return;
         var center = GetCenter();
-        EaseTo(center.Lat, center.Lon, GetZoom() - 1, GetBearing(), GetPitch(), durationMs: 250);
+        EaseTo(center.Latitude, center.Longitude, GetZoom() - 1, GetBearing(), GetPitch(), durationMs: 250);
     }
 
     private void ResetNorth()
     {
         if (_map == null) return;
         var center = GetCenter();
-        EaseTo(center.Lat, center.Lon, GetZoom(), bearing: 0, pitch: GetPitch(), durationMs: 250);
+        EaseTo(center.Latitude, center.Longitude, GetZoom(), bearing: 0, pitch: GetPitch(), durationMs: 250);
     }
 
     /// <summary>
