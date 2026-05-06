@@ -19,7 +19,7 @@
 ### ✨ Features and improvements
 - **`mbgl_source_get_attribution()`** added to the C ABI: reads `Source::getAttribution()` (populated from TileJSON metadata) and returns a caller-owned string.
 - **`MbglStyle.GetSourceAttributions()`** — iterates all loaded style sources and returns unique, non-empty attribution strings. Foundation for OSM-compliant attribution display.
-- **`MapLibreMap.ShowNavigationControls`** (default `false`) and **`MapLibreMap.ShowAttributionControl`** (default `true`) bindable properties added, plus **`MapLibreMap.CustomAttribution`** for app-supplied attribution text.
+- **`MapLibreMap.ShowNavigationControls`** (default `true`) and **`MapLibreMap.ShowAttributionControl`** (default `true`) bindable properties added, plus **`MapLibreMap.CustomAttribution`** for app-supplied attribution text.
 - **Windows: navigation overlay** — two extra `WS_POPUP` HWNDs are created alongside the GL popup after `TryInitialize`. The *nav overlay* (top-right, 29×90 px) paints zoom-in (+), zoom-out (−) and compass/reset-north (↑) buttons using GDI. Clicking calls `EaseTo(zoom±1)` and `EaseTo(bearing:0)`. The *attribution overlay* (bottom-right) is a `WS_EX_LAYERED` popup (92% alpha) that always shows the concatenated TileJSON source attributions as plain text, refreshed on every `StyleLoaded` event. HTML `<a>` tags are stripped to plain text. Both overlays track the GL popup position via `UpdateChildWindowPosition()` and are destroyed safely in `DisposeNative()`. Android/iOS stubs added (`SetShowNavigationControls`/`SetShowAttributionControl` no-ops); full platform implementations planned.
 
 ## 1.1.6
