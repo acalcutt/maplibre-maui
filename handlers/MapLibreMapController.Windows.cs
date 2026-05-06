@@ -84,6 +84,82 @@ public class MapLibreMapController : IMapLibreMapController
 
     private delegate bool EnumChildProc(IntPtr hWnd, IntPtr lParam);
 
+    // ── GDI painting (overlay windows) ───────────────────────────────────────
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PAINTSTRUCT
+    {
+        public IntPtr hdc;
+        public int    fErase;
+        public RECT   rcPaint;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
+        public byte[] rgbReserved;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr BeginPaint(IntPtr hWnd, out PAINTSTRUCT ps);
+
+    [DllImport("user32.dll")]
+    private static extern bool EndPaint(IntPtr hWnd, ref PAINTSTRUCT ps);
+
+    [DllImport("user32.dll")]
+    private static extern bool InvalidateRect(IntPtr hWnd, IntPtr lpRect, bool bErase);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateSolidBrush(uint crColor);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreatePen(int fnPenStyle, int nWidth, uint crColor);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr SelectObject(IntPtr hdc, IntPtr h);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr ho);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool Rectangle(IntPtr hdc, int left, int top, int right, int bottom);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool RoundRect(IntPtr hdc, int left, int top, int right, int bottom, int width, int height);
+
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool TextOutW(IntPtr hdc, int x, int y, string text, int count);
+
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr CreateFontW(int cHeight, int cWidth, int cEscapement, int cOrientation,
+        int cWeight, uint bItalic, uint bUnderline, uint bStrikeOut, uint iCharSet,
+        uint iOutPrecision, uint iClipPrecision, uint iQuality, uint iPitchAndFamily,
+        string pszFaceName);
+
+    [DllImport("gdi32.dll")]
+    private static extern uint SetTextColor(IntPtr hdc, uint crColor);
+
+    [DllImport("gdi32.dll")]
+    private static extern uint SetBkMode(IntPtr hdc, int iBkMode);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool MoveToEx(IntPtr hdc, int x, int y, IntPtr lppt);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool LineTo(IntPtr hdc, int x, int y);
+
+    private const int  PS_SOLID    = 0;
+    private const int  FW_NORMAL   = 400;
+    private const int  FW_BOLD     = 700;
+    private const int  TRANSPARENT = 1;
+    private const uint DEFAULT_CHARSET  = 1;
+    private const uint OUT_DEFAULT_PRECIS = 0;
+    private const uint CLIP_DEFAULT_PRECIS = 0;
+    private const uint CLEARTYPE_QUALITY  = 5;
+    private const uint DEFAULT_PITCH = 0;
+
+    // ── SetLayeredWindowAttributes (for per-pixel alpha on attribution) ───────
+    [DllImport("user32.dll")]
+    private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
+    private const uint LWA_ALPHA     = 0x00000002;
+    private const uint LWA_COLORKEY  = 0x00000001;
+
     [DllImport("user32.dll")]
     private static extern IntPtr GetDC(IntPtr hWnd);
 
@@ -269,6 +345,27 @@ public class MapLibreMapController : IMapLibreMapController
     private MbglMap?      _map;
     private MbglStyle?    _style;
 
+    // ── Overlay windows ───────────────────────────────────────────────────────
+    // Nav panel (zoom-in, zoom-out, compass) — top-right corner, 29×90px logical
+    private IntPtr _navHwnd   = IntPtr.Zero;
+    private WndProcDelegate? _navWndProc;   // keep-alive
+    private bool   _showNavControls = true;
+    // Attribution — bottom-right corner, auto-width text band
+    private IntPtr _attrHwnd  = IntPtr.Zero;
+    private WndProcDelegate? _attrWndProc;  // keep-alive
+    private bool   _showAttrControl = true;
+    private string? _customAttribution;
+    private string  _attrText = string.Empty;  // cached, rebuilt on StyleLoaded
+    private IntPtr  _attrFont = IntPtr.Zero;
+    private IntPtr  _navFont  = IntPtr.Zero;
+    // Hit-testing constants (logical pixels, scaled by _pixelRatio internally)
+    private const int NavButtonSize   = 29;   // px
+    private const int NavPanelMargin  = 10;   // from map edge
+    private const int AttrPadH        = 6;    // horizontal text padding
+    private const int AttrPadV        = 3;    // vertical text padding
+    private const int AttrFontSizePt  = 11;
+    private const string OverlayClass = "MapLibreOverlay";
+
     // Pumps the libuv run loop on the UI thread. Without this, async HTTP responses
     // for style/tile downloads are never delivered and StyleLoaded never fires.
     private Microsoft.UI.Xaml.DispatcherTimer? _runLoopTimer;
@@ -352,6 +449,7 @@ public class MapLibreMapController : IMapLibreMapController
         InitMaplibre(physW, physH);
         UpdateChildWindowPosition();
         StartRunLoopPump();
+        CreateOverlays();
 
         // Force at least one paint so we can visually verify the GL HWND is rendering
         // (vs. being covered by the WinUI compositor).
@@ -499,6 +597,7 @@ public class MapLibreMapController : IMapLibreMapController
                 _styleReady = true;
                 _style = _map?.GetStyle();
                 _renderNeedsUpdate = true;
+                RefreshAttributionText();  // rebuild attribution from TileJSON sources
                 OnStyleLoadedReceived?.Invoke(new Maps.Style(null));
                 break;
             case "onDidBecomeIdle":
@@ -559,6 +658,7 @@ public class MapLibreMapController : IMapLibreMapController
         int h = Math.Max(1, (int)(View.ActualHeight * _pixelRatio));
 
         SetWindowPos(_childHwnd, HWND_TOP, x, y, w, h, SWP_NOACTIVATE);
+        PositionOverlays();  // keep overlay windows tracking the map
 
         if (_logPositionCount < 5)
         {
@@ -826,6 +926,382 @@ public class MapLibreMapController : IMapLibreMapController
         }
     }
 
+    // ── Overlay window management ──────────────────────────────────────────────
+
+    private static bool _overlayClassRegistered;
+    private static WndProcDelegate? _overlayClassWndProc;  // keep-alive for class WndProc
+
+    private static void EnsureOverlayClassRegistered()
+    {
+        if (_overlayClassRegistered) return;
+        // The class WndProc is just a no-op placeholder; each window gets subclassed.
+        _overlayClassWndProc = (h, m, w, l) => DefWindowProcA(h, m, w, l);
+        var wc = new WNDCLASSEXA
+        {
+            cbSize        = (uint)Marshal.SizeOf<WNDCLASSEXA>(),
+            style         = 0,
+            lpfnWndProc   = Marshal.GetFunctionPointerForDelegate(_overlayClassWndProc),
+            hInstance     = GetModuleHandleW(IntPtr.Zero),
+            lpszClassName = OverlayClass,
+        };
+        RegisterClassExA(ref wc);
+        _overlayClassRegistered = true;
+    }
+
+    /// <summary>
+    /// Creates the nav and attribution overlay HWNDs and installs their WndProcs.
+    /// Must be called after <see cref="TryInitialize"/> has set <c>_childHwnd</c>.
+    /// </summary>
+    private void CreateOverlays()
+    {
+        EnsureOverlayClassRegistered();
+
+        // Nav panel: WS_POPUP | WS_VISIBLE, WS_EX_NOACTIVATE so it doesn't steal focus.
+        // Sized to 29×90 (3 buttons) in physical pixels; positioned top-right.
+        _navWndProc = NavOverlayWndProc;
+        _navHwnd = CreateWindowExA(
+            WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+            OverlayClass, "",
+            WS_POPUP | WS_VISIBLE | WS_CLIPSIBLINGS,
+            0, 0, 1, 1,
+            _effectiveParentHwnd, IntPtr.Zero, GetModuleHandleW(IntPtr.Zero), IntPtr.Zero);
+        if (_navHwnd != IntPtr.Zero)
+        {
+            SetWindowLongPtr(_navHwnd, GWLP_WNDPROC,
+                Marshal.GetFunctionPointerForDelegate(_navWndProc));
+            // Create the GDI font for nav buttons once.
+            int fontH = -(int)(_pixelRatio * 14);
+            _navFont = CreateFontW(fontH, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET,
+                OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, "Segoe UI Symbol");
+        }
+
+        // Attribution band: small always-visible text overlay, bottom-right.
+        _attrWndProc = AttrOverlayWndProc;
+        _attrHwnd = CreateWindowExA(
+            WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_LAYERED,
+            OverlayClass, "",
+            WS_POPUP | WS_VISIBLE | WS_CLIPSIBLINGS,
+            0, 0, 1, 1,
+            _effectiveParentHwnd, IntPtr.Zero, GetModuleHandleW(IntPtr.Zero), IntPtr.Zero);
+        if (_attrHwnd != IntPtr.Zero)
+        {
+            // 92% opacity — matches maplibre-gl-js attribution style.
+            SetLayeredWindowAttributes(_attrHwnd, 0, 235, LWA_ALPHA);
+            SetWindowLongPtr(_attrHwnd, GWLP_WNDPROC,
+                Marshal.GetFunctionPointerForDelegate(_attrWndProc));
+            int fontH = -(int)(_pixelRatio * AttrFontSizePt);
+            _attrFont = CreateFontW(fontH, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET,
+                OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, "Segoe UI");
+        }
+
+        PositionOverlays();
+        ShowOverlays();
+    }
+
+    /// <summary>Show/hide overlays based on current enabled flags.</summary>
+    private void ShowOverlays()
+    {
+        if (_navHwnd  != IntPtr.Zero)
+        {
+            uint showFlag = (_showNavControls && _initialized)
+                ? WS_VISIBLE : 0;
+            uint style = (uint)GetWindowLongA(_navHwnd, GWL_STYLE);
+            SetWindowLongPtr(_navHwnd, GWL_STYLE,
+                (IntPtr)((_showNavControls && _initialized)
+                    ? (style | WS_VISIBLE)
+                    : (style & ~WS_VISIBLE)));
+            SetWindowPos(_navHwnd, HWND_TOP, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW_OR_HIDE(
+                    _showNavControls && _initialized));
+        }
+        if (_attrHwnd != IntPtr.Zero)
+        {
+            SetWindowPos(_attrHwnd, HWND_TOP, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW_OR_HIDE(
+                    _showAttrControl && _initialized && _attrText.Length > 0));
+        }
+    }
+
+    private static uint SWP_SHOWWINDOW_OR_HIDE(bool show)
+        => show ? SWP_SHOWWINDOW : SWP_HIDEWINDOW;
+
+    private const uint SWP_SHOWWINDOW = 0x0040;
+    private const uint SWP_HIDEWINDOW = 0x0080;
+
+    [DllImport("user32.dll")]
+    private static extern int GetWindowLongA(IntPtr hWnd, int nIndex);
+    private const int GWL_STYLE = -16;
+
+    /// <summary>Position overlays relative to the GL popup window.</summary>
+    private void PositionOverlays()
+    {
+        if (_childHwnd == IntPtr.Zero) return;
+        GetWindowRect(_childHwnd, out var wr);
+        int mapW = wr.Right  - wr.Left;
+        int mapH = wr.Bottom - wr.Top;
+
+        int marginPx  = (int)(NavPanelMargin * _pixelRatio);
+        int btnSizePx = (int)(NavButtonSize  * _pixelRatio);
+
+        if (_navHwnd != IntPtr.Zero && _showNavControls)
+        {
+            // Three buttons: zoom-in, zoom-out, compass — each NavButtonSize wide.
+            int panelH = btnSizePx * 3 + 2;  // +2 for separator lines
+            int navX   = wr.Left + mapW - btnSizePx - marginPx;
+            int navY   = wr.Top  + marginPx;
+            SetWindowPos(_navHwnd, HWND_TOP, navX, navY, btnSizePx, panelH, SWP_NOACTIVATE);
+            BringWindowToTop(_navHwnd);
+        }
+
+        if (_attrHwnd != IntPtr.Zero && _showAttrControl && _attrText.Length > 0)
+        {
+            // Measure text width via temporary HDC.
+            var hdc = GetDC(IntPtr.Zero);
+            var oldFont = SelectObject(hdc, _attrFont != IntPtr.Zero ? _attrFont : IntPtr.Zero);
+            GetTextExtentPoint32W(hdc, _attrText, _attrText.Length, out var sz);
+            SelectObject(hdc, oldFont);
+            ReleaseDC(IntPtr.Zero, hdc);
+
+            int padH = (int)(AttrPadH * _pixelRatio);
+            int padV = (int)(AttrPadV * _pixelRatio);
+            int attrW = sz.cx + padH * 2;
+            int attrH = sz.cy + padV * 2;
+            int attrX = wr.Left + mapW - attrW - marginPx;
+            int attrY = wr.Top  + mapH - attrH - marginPx;
+            SetWindowPos(_attrHwnd, HWND_TOP, attrX, attrY, attrW, attrH, SWP_NOACTIVATE);
+            BringWindowToTop(_attrHwnd);
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SIZE { public int cx; public int cy; }
+
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool GetTextExtentPoint32W(IntPtr hdc, string lpString, int c, out SIZE lpSize);
+
+    private void DestroyOverlays()
+    {
+        if (_navFont  != IntPtr.Zero) { DeleteObject(_navFont);  _navFont  = IntPtr.Zero; }
+        if (_attrFont != IntPtr.Zero) { DeleteObject(_attrFont); _attrFont = IntPtr.Zero; }
+        if (_navHwnd  != IntPtr.Zero) { DestroyWindow(_navHwnd);  _navHwnd  = IntPtr.Zero; }
+        if (_attrHwnd != IntPtr.Zero) { DestroyWindow(_attrHwnd); _attrHwnd = IntPtr.Zero; }
+        _navWndProc  = null;
+        _attrWndProc = null;
+    }
+
+    // ── Nav overlay WndProc ────────────────────────────────────────────────────
+
+    private const uint WM_PAINT   = 0x000F;
+    private const uint WM_ERASEBKGND = 0x0014;
+    private const uint WM_NCHITTEST  = 0x0084;
+    private const uint WM_SETCURSOR  = 0x0020;
+    private static readonly IntPtr HTCLIENT = new(1);
+
+    private IntPtr NavOverlayWndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+        switch (msg)
+        {
+            case WM_ERASEBKGND: return new IntPtr(1);  // no erase flicker
+            case WM_PAINT:
+                PaintNavPanel(hWnd);
+                return IntPtr.Zero;
+            case WM_LBUTTONDOWN:
+            {
+                int btnSizePx = (int)(NavButtonSize * _pixelRatio);
+                int y = (short)((lParam.ToInt32() >> 16) & 0xFFFF);
+                int btn = y / (btnSizePx + 1);
+                switch (btn)
+                {
+                    case 0: ZoomIn();    break;  // top button = zoom in (+)
+                    case 1: ZoomOut();   break;  // middle     = zoom out (−)
+                    case 2: ResetNorth();break;  // bottom     = compass/reset-north
+                }
+                return IntPtr.Zero;
+            }
+            case WM_NCHITTEST: return HTCLIENT;
+        }
+        return DefWindowProcA(hWnd, msg, wParam, lParam);
+    }
+
+    private void PaintNavPanel(IntPtr hWnd)
+    {
+        var ps = new PAINTSTRUCT
+        {
+            rgbReserved = new byte[32]
+        };
+        var hdc = BeginPaint(hWnd, out ps);
+        try
+        {
+            GetClientRect(hWnd, out var rc);
+            int btnSizePx = rc.Right;  // window width == button size
+
+            // White rounded background
+            var bgBrush  = CreateSolidBrush(0x00FFFFFF);
+            var borderPen = CreatePen(PS_SOLID, 1, 0x00CCCCCC);
+            var oldBrush = SelectObject(hdc, bgBrush);
+            var oldPen   = SelectObject(hdc, borderPen);
+            RoundRect(hdc, 0, 0, rc.Right, rc.Bottom, 6, 6);
+            SelectObject(hdc, oldBrush);
+            SelectObject(hdc, oldPen);
+            DeleteObject(bgBrush);
+            DeleteObject(borderPen);
+
+            // Divider lines between buttons
+            var divPen = CreatePen(PS_SOLID, 1, 0x00E0E0E0);
+            SelectObject(hdc, divPen);
+            MoveToEx(hdc, 4, btnSizePx, IntPtr.Zero);
+            LineTo(hdc, btnSizePx - 4, btnSizePx);
+            MoveToEx(hdc, 4, btnSizePx * 2 + 1, IntPtr.Zero);
+            LineTo(hdc, btnSizePx - 4, btnSizePx * 2 + 1);
+            SelectObject(hdc, oldPen);
+            DeleteObject(divPen);
+
+            // Button labels: +, −, ↑ (compass north arrow)
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, 0x00333333);
+            var oldFont = SelectObject(hdc, _navFont != IntPtr.Zero ? _navFont : IntPtr.Zero);
+
+            // Measure each symbol to center it.
+            PaintCenteredText(hdc, "+",    0,             btnSizePx, btnSizePx);
+            PaintCenteredText(hdc, "−",    btnSizePx + 1, btnSizePx, btnSizePx);
+            // ↑ compass arrow (Unicode north arrow ↑)
+            PaintCenteredText(hdc, "↑",    btnSizePx * 2 + 2, btnSizePx, btnSizePx);
+
+            SelectObject(hdc, oldFont);
+        }
+        finally { EndPaint(hWnd, ref ps); }
+    }
+
+    private static void PaintCenteredText(IntPtr hdc, string text, int rowY, int rowH, int rowW)
+    {
+        GetTextExtentPoint32W(hdc, text, text.Length, out var sz);
+        int x = (rowW - sz.cx) / 2;
+        int y = rowY + (rowH - sz.cy) / 2;
+        TextOutW(hdc, x, y, text, text.Length);
+    }
+
+    // ── Attribution overlay WndProc ────────────────────────────────────────────
+
+    private IntPtr AttrOverlayWndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+        switch (msg)
+        {
+            case WM_ERASEBKGND: return new IntPtr(1);
+            case WM_PAINT:
+                PaintAttribution(hWnd);
+                return IntPtr.Zero;
+            case WM_NCHITTEST: return HTCLIENT;
+        }
+        return DefWindowProcA(hWnd, msg, wParam, lParam);
+    }
+
+    private void PaintAttribution(IntPtr hWnd)
+    {
+        var ps = new PAINTSTRUCT { rgbReserved = new byte[32] };
+        var hdc = BeginPaint(hWnd, out ps);
+        try
+        {
+            GetClientRect(hWnd, out var rc);
+            int padH = (int)(AttrPadH * _pixelRatio);
+            int padV = (int)(AttrPadV * _pixelRatio);
+
+            // Slightly translucent white background (actual alpha set by WS_EX_LAYERED on the HWND).
+            var bgBrush   = CreateSolidBrush(0x00F8F8F8);
+            var borderPen = CreatePen(PS_SOLID, 1, 0x00D0D0D0);
+            var oldBrush  = SelectObject(hdc, bgBrush);
+            var oldPen    = SelectObject(hdc, borderPen);
+            RoundRect(hdc, 0, 0, rc.Right, rc.Bottom, 4, 4);
+            SelectObject(hdc, oldBrush);
+            SelectObject(hdc, oldPen);
+            DeleteObject(bgBrush);
+            DeleteObject(borderPen);
+
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, 0x00555555);
+            var oldFont = SelectObject(hdc, _attrFont != IntPtr.Zero ? _attrFont : IntPtr.Zero);
+            TextOutW(hdc, padH, padV, _attrText, _attrText.Length);
+            SelectObject(hdc, oldFont);
+        }
+        finally { EndPaint(hWnd, ref ps); }
+    }
+
+    // ── Nav/attribution public API ─────────────────────────────────────────────
+
+    private void ZoomIn()
+    {
+        if (_map == null) return;
+        var center = GetCenter();
+        EaseTo(center.Lat, center.Lon, GetZoom() + 1, GetBearing(), GetPitch(), durationMs: 250);
+    }
+
+    private void ZoomOut()
+    {
+        if (_map == null) return;
+        var center = GetCenter();
+        EaseTo(center.Lat, center.Lon, GetZoom() - 1, GetBearing(), GetPitch(), durationMs: 250);
+    }
+
+    private void ResetNorth()
+    {
+        if (_map == null) return;
+        var center = GetCenter();
+        EaseTo(center.Lat, center.Lon, GetZoom(), bearing: 0, pitch: GetPitch(), durationMs: 250);
+    }
+
+    /// <summary>
+    /// Rebuilds the attribution text from all loaded TileJSON sources and repositions
+    /// the attribution overlay. Called after <c>StyleLoaded</c>.
+    /// </summary>
+    private void RefreshAttributionText()
+    {
+        if (_style == null) { _attrText = string.Empty; return; }
+        var parts = new System.Collections.Generic.List<string>(_style.GetSourceAttributions());
+        if (!string.IsNullOrWhiteSpace(_customAttribution))
+            parts.Add(_customAttribution!);
+        // Strip HTML tags to plain text (attribution strings from OSM are like
+        // "© <a href='...'>OpenStreetMap</a> contributors" — we strip the links for now).
+        var sb = new System.Text.StringBuilder();
+        foreach (var part in parts)
+        {
+            if (sb.Length > 0) sb.Append(" | ");
+            sb.Append(StripHtmlTags(part));
+        }
+        _attrText = sb.ToString();
+        if (_attrHwnd != IntPtr.Zero && _showAttrControl)
+        {
+            PositionOverlays();
+            InvalidateRect(_attrHwnd, IntPtr.Zero, false);
+            ShowOverlays();
+        }
+    }
+
+    private static string StripHtmlTags(string html)
+    {
+        if (string.IsNullOrEmpty(html)) return html;
+        var sb = new System.Text.StringBuilder(html.Length);
+        bool inTag = false;
+        foreach (char c in html)
+        {
+            if      (c == '<') inTag = true;
+            else if (c == '>') inTag = false;
+            else if (!inTag)   sb.Append(c);
+        }
+        return sb.ToString().Trim();
+    }
+
+    public void SetShowNavigationControls(bool show)
+    {
+        _showNavControls = show;
+        ShowOverlays();
+    }
+
+    public void SetShowAttributionControl(bool show, string? customAttribution)
+    {
+        _showAttrControl   = show;
+        _customAttribution = customAttribution;
+        RefreshAttributionText();
+    }
+
     // ── Popup WndProc (mouse input) ────────────────────────────────────────────
 
     private IntPtr PopupWndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
@@ -947,6 +1423,8 @@ public class MapLibreMapController : IMapLibreMapController
             ReleaseDC(_childHwnd, _hDC);
             _hDC = IntPtr.Zero;
         }
+        // Destroy overlay windows before the GL popup so GDI handles are clean.
+        DestroyOverlays();
         if (_childHwnd != IntPtr.Zero)
         {
             // Restore the original WndProc before destroying the window so no

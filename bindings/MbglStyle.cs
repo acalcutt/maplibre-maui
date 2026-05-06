@@ -81,6 +81,37 @@ public sealed class MbglStyle
     public void RemoveLayer(string layerId)
         => NativeMethods.StyleRemoveLayer(Handle, layerId);
 
+    // ── Attribution ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Iterates every source in the loaded style and collects unique, non-empty
+    /// attribution strings (from TileJSON metadata), in the order they appear.
+    /// The result is suitable for building an OSM-compliant attribution overlay.
+    /// Returns an empty array before a style is loaded.
+    /// </summary>
+    public IReadOnlyList<string> GetSourceAttributions()
+    {
+        var idsPtr = NativeMethods.StyleGetSourceIds(Handle);
+        if (idsPtr == IntPtr.Zero) return [];
+        var raw = Marshal.PtrToStringUTF8(idsPtr) ?? string.Empty;
+        NativeMethods.FreeString(idsPtr);
+
+        var seen  = new HashSet<string>(StringComparer.Ordinal);
+        var result = new List<string>();
+        foreach (var id in raw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var srcPtr  = NativeMethods.StyleGetSource(Handle, id);
+            if (srcPtr == IntPtr.Zero) continue;
+            var attrPtr = NativeMethods.SourceGetAttribution(srcPtr);
+            if (attrPtr == IntPtr.Zero) continue;
+            var attr = Marshal.PtrToStringUTF8(attrPtr) ?? string.Empty;
+            NativeMethods.FreeString(attrPtr);
+            if (!string.IsNullOrWhiteSpace(attr) && seen.Add(attr))
+                result.Add(attr);
+        }
+        return result;
+    }
+
     // ── Images ────────────────────────────────────────────────────────────────
 
     /// <summary>Add a sprite image. <paramref name="rgbaPremultiplied"/> must be

@@ -409,6 +409,10 @@ public static partial class NativeMethods
         StringMarshalling = StringMarshalling.Utf8)]
     public static partial IntPtr StyleGetSource(IntPtr style, string sourceId);
 
+    /// <summary>Returns the attribution text of a source (may be NULL). Caller frees with FreeString.</summary>
+    [LibraryImport(Lib, EntryPoint = "mbgl_source_get_attribution")]
+    public static partial IntPtr SourceGetAttribution(IntPtr source);
+
     // ── Layer – read-back (Tier 1) ────────────────────────────────────────────
     [LibraryImport(Lib, EntryPoint = "mbgl_layer_get_paint_property",
         StringMarshalling = StringMarshalling.Utf8)]

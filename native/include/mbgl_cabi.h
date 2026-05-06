@@ -170,6 +170,12 @@ MBGL_CABI_API char*           mbgl_style_get_layer_ids(mbgl_style_t st);
 MBGL_CABI_API mbgl_layer_t    mbgl_style_get_layer(mbgl_style_t st, const char* layer_id);
 /** Get a source handle by ID (returns NULL if not found). */
 MBGL_CABI_API mbgl_source_t   mbgl_style_get_source(mbgl_style_t st, const char* source_id);
+/**
+ * Returns the attribution text for the given source handle (may be NULL or empty).
+ * The returned string must be freed with mbgl_free_string().
+ * Suitable for building an OSM-compliant attribution overlay.
+ */
+MBGL_CABI_API char*           mbgl_source_get_attribution(mbgl_source_t src);
 
 /* ── Layer – read-back ──────────────────────────────────────────────────────── */
 /** Returns a JSON-encoded value or NULL if not set; caller frees. */

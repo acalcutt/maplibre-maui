@@ -7,6 +7,13 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
+## 1.1.7
+### ✨ Features and improvements
+- **`mbgl_source_get_attribution()`** added to the C ABI: reads `Source::getAttribution()` (populated from TileJSON metadata) and returns a caller-owned string.
+- **`MbglStyle.GetSourceAttributions()`** — iterates all loaded style sources and returns unique, non-empty attribution strings. Foundation for OSM-compliant attribution display.
+- **`MapLibreMap.ShowNavigationControls`** (default `true`) and **`MapLibreMap.ShowAttributionControl`** (default `true`) bindable properties added, plus **`MapLibreMap.CustomAttribution`** for app-supplied attribution text.
+- **Windows: navigation overlay** — two extra `WS_POPUP` HWNDs are created alongside the GL popup after `TryInitialize`. The *nav overlay* (top-right, 29×90 px) paints zoom-in (+), zoom-out (−) and compass/reset-north (↑) buttons using GDI. Clicking calls `EaseTo(zoom±1)` and `EaseTo(bearing:0)`. The *attribution overlay* (bottom-right) is a `WS_EX_LAYERED` popup (92% alpha) that always shows the concatenated TileJSON source attributions as plain text, refreshed on every `StyleLoaded` event. HTML `<a>` tags are stripped to plain text. Both overlays track the GL popup position via `UpdateChildWindowPosition()` and are destroyed safely in `DisposeNative()`. Android/iOS stubs added (`SetShowNavigationControls`/`SetShowAttributionControl` no-ops); full platform implementations planned.
+
 ## 1.1.6
 ### ✨ Features and improvements
 - **Windows: mouse pan, scroll-wheel zoom, and double-click zoom now work.** The GL render target is a top-level popup window (the WinUI 3 airspace workaround introduced in 1.1.2), which sits above the XAML compositor and intercepts all Win32 mouse messages before WinUI/MAUI sees them. Previously the MAUI pointer events wired on the placeholder `Grid` never fired over the map area. Fixed by subclassing the popup HWND's `WndProc` via `SetWindowLongPtr(GWLP_WNDPROC)` to handle `WM_LBUTTONDOWN` / `WM_MOUSEMOVE` / `WM_LBUTTONUP` / `WM_MOUSEWHEEL` / `WM_LBUTTONDBLCLK` directly in the controller and forwarding them to the existing `OnPanStart` / `OnPanMove` / `OnPanEnd` / `OnScroll` / `OnDoubleTap` mbgl camera APIs. The original WndProc is restored before `DestroyWindow` on teardown.

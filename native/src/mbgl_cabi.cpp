@@ -863,6 +863,14 @@ mbgl_source_t mbgl_style_get_source(mbgl_style_t st, const char* source_id) {
     return style_ref(st).getSource(safe_str(source_id));
 }
 
+char* mbgl_source_get_attribution(mbgl_source_t src) {
+    if (!src) return nullptr;
+    auto* s = static_cast<mbgl::style::Source*>(src);
+    const auto& attr = s->getAttribution();
+    if (!attr) return nullptr;
+    return dup_string(*attr);
+}
+
 /* ─── Layer read-back ────────────────────────────────────────────────────────── */
 
 static char* style_property_to_json(const mbgl::style::StyleProperty& prop) {

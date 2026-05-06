@@ -21,6 +21,9 @@ public partial class MapLibreMapHandler
             [nameof(MapLibreMap.CompassViewMargins)] = MapCompassViewMargins,
             [nameof(MapLibreMap.AttributionButtonGravity)] = MapAttributionButtonGravity,
             [nameof(MapLibreMap.AttributionButtonMargins)] = MapAttributionButtonMargins,
+            [nameof(MapLibreMap.ShowNavigationControls)]   = MapShowNavigationControls,
+            [nameof(MapLibreMap.ShowAttributionControl)]   = MapShowAttributionControl,
+            [nameof(MapLibreMap.CustomAttribution)]        = MapCustomAttribution,
         };
         
     public static void MapStyleUrl(MapLibreMapHandler handler, MapLibreMap view)
@@ -81,4 +84,13 @@ public partial class MapLibreMapHandler
     public static void MapAttributionButtonGravity(MapLibreMapHandler handler, MapLibreMap view) => handler.UpdateAttributionButtonGravity(view.AttributionButtonGravity);
     
     public static void MapAttributionButtonMargins(MapLibreMapHandler handler, MapLibreMap view) => handler.UpdateAttributionButtonMargins(view.AttributionButtonMargins);
+
+    public static void MapShowNavigationControls(MapLibreMapHandler handler, MapLibreMap view)
+        => handler.UpdateShowNavigationControls(view.ShowNavigationControls);
+
+    public static void MapShowAttributionControl(MapLibreMapHandler handler, MapLibreMap view)
+        => handler.UpdateShowAttributionControl(view.ShowAttributionControl, view.CustomAttribution);
+
+    public static void MapCustomAttribution(MapLibreMapHandler handler, MapLibreMap view)
+        => handler.UpdateShowAttributionControl(view.ShowAttributionControl, view.CustomAttribution);
 }

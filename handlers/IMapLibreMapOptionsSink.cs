@@ -37,5 +37,15 @@ public interface IMapLibreMapOptionsSink
 
     void SetAttributionButtonMargins(int x, int y);
 
+    /// <summary>Show or hide the zoom/compass navigation overlay.</summary>
+    void SetShowNavigationControls(bool show);
+
+    /// <summary>
+    /// Show or hide the attribution overlay. When shown, attributions are read
+    /// from all loaded TileJSON sources; <paramref name="customAttribution"/> is
+    /// appended after them.
+    /// </summary>
+    void SetShowAttributionControl(bool show, string? customAttribution);
+
     //void SetLocationEngineProperties(LocationEngineRequest? locationEngineRequest);
 }

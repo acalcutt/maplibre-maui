@@ -28,6 +28,20 @@ public class MapLibreMap : StackLayout
     public static readonly BindableProperty CompassViewMarginsProperty = BindableProperty.Create(nameof(CompassViewMargins), typeof(int?[]), typeof(MapLibreMap));
     public static readonly BindableProperty AttributionButtonGravityProperty = BindableProperty.Create(nameof(AttributionButtonGravity), typeof(int), typeof(MapLibreMap));
     public static readonly BindableProperty AttributionButtonMarginsProperty = BindableProperty.Create(nameof(AttributionButtonMargins), typeof(int?[]), typeof(MapLibreMap));
+    /// <summary>Show zoom-in, zoom-out and compass/reset-north buttons. Default <c>true</c>.</summary>
+    public static readonly BindableProperty ShowNavigationControlsProperty =
+        BindableProperty.Create(nameof(ShowNavigationControls), typeof(bool), typeof(MapLibreMap), defaultValue: true);
+    /// <summary>
+    /// Show an always-visible attribution overlay (OSM requires this).
+    /// Attributions are collected from all loaded TileJSON sources plus
+    /// <see cref="CustomAttribution"/>. Default <c>true</c>.
+    /// </summary>
+    public static readonly BindableProperty ShowAttributionControlProperty =
+        BindableProperty.Create(nameof(ShowAttributionControl), typeof(bool), typeof(MapLibreMap), defaultValue: true);
+    /// <summary>Extra attribution text appended after source-derived attributions.</summary>
+    public static readonly BindableProperty CustomAttributionProperty =
+        BindableProperty.Create(nameof(CustomAttribution), typeof(string), typeof(MapLibreMap));
+
     public static readonly BindableProperty MapReadyCommandProperty = BindableProperty.Create(nameof(MapReadyCommand), typeof(ICommand), typeof(MapLibreMap));
     public static readonly BindableProperty StyleLoadedCommandProperty = BindableProperty.Create(nameof(StyleLoadedCommand), typeof(ICommand), typeof(MapLibreMap));
     public static readonly BindableProperty DidBecomeIdleCommandProperty = BindableProperty.Create(nameof(DidBecomeIdleCommand), typeof(ICommand), typeof(MapLibreMap));
@@ -200,6 +214,24 @@ public class MapLibreMap : StackLayout
     {
         get => (int?[])GetValue(AttributionButtonMarginsProperty);
         set => SetValue(AttributionButtonMarginsProperty, value);
+    }
+
+    public bool ShowNavigationControls
+    {
+        get => (bool)GetValue(ShowNavigationControlsProperty);
+        set => SetValue(ShowNavigationControlsProperty, value);
+    }
+
+    public bool ShowAttributionControl
+    {
+        get => (bool)GetValue(ShowAttributionControlProperty);
+        set => SetValue(ShowAttributionControlProperty, value);
+    }
+
+    public string? CustomAttribution
+    {
+        get => (string?)GetValue(CustomAttributionProperty);
+        set => SetValue(CustomAttributionProperty, value);
     }
 
     public void AddGeoJsonSource(string sourceName, FeatureCollection collection)
