@@ -19,12 +19,19 @@ public sealed class MbglFrontend : IDisposable
 {
     internal IntPtr Handle { get; private set; }
 
+    // Set to true after MbglMap takes ownership. Dispose() becomes a no-op
+    // but Handle intentionally stays valid so Render/SetSize calls continue
+    // to work normally through the frontend's lifetime.
+    private bool _ownershipTransferred;
+
     /// <summary>
-    /// Zeros the native handle, marking it as owned by the <see cref="MbglMap"/>.
+    /// Marks the native pointer as owned by the <see cref="MbglMap"/>.
     /// Called automatically by the <see cref="MbglMap"/> constructor.
-    /// Subsequent calls to <see cref="Dispose"/> become no-ops.
+    /// After this, <see cref="Dispose"/> will not call <c>mbgl_frontend_destroy</c>
+    /// (since <c>mbgl_map_destroy</c> already does so), but <see cref="Handle"/>
+    /// remains valid for <see cref="Render"/> / <see cref="SetSize"/> calls.
     /// </summary>
-    internal void TransferOwnership() => Handle = IntPtr.Zero;
+    internal void TransferOwnership() => _ownershipTransferred = true;
 
     // Prevent the delegate from being collected
     private readonly NativeMethods.RenderFn _renderDelegate;
@@ -73,7 +80,9 @@ public sealed class MbglFrontend : IDisposable
 
     public void Dispose()
     {
-        if (Handle != IntPtr.Zero)
+        // If MbglMap took ownership, mbgl_map_destroy already freed this pointer.
+        // Do not call mbgl_frontend_destroy — that would be a double-free.
+        if (!_ownershipTransferred && Handle != IntPtr.Zero)
         {
             NativeMethods.FrontendDestroy(Handle);
             Handle = IntPtr.Zero;

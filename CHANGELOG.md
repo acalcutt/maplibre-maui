@@ -7,6 +7,10 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
+## 1.1.5
+### 🐞 Bug fixes
+- **Fixed regression introduced in 1.1.4: null-pointer crash (`ExecutionEngineException`) on first map load.** `MbglFrontend.TransferOwnership()` previously zeroed the native `Handle`, so subsequent `Render()` / `SetSize()` calls passed `IntPtr.Zero` to the native layer, causing an immediate null-dereference crash. Changed `TransferOwnership()` to set a boolean flag instead; `Handle` remains valid throughout the frontend's lifetime. `Dispose()` uses the flag to skip `mbgl_frontend_destroy` (avoiding the double-free fixed in 1.1.4) while still allowing all normal operations to work.
+
 ## 1.1.4
 ### 🐞 Bug fixes
 - **All platforms: fixed heap corruption / `0xc0000374` crash on page navigation (double-free of the frontend native object).** `mbgl_map_create` transfers ownership of the `mbgl_frontend_t*` pointer into the internal `CabiMap` struct, so `mbgl_map_destroy` already destroys the frontend C++ object. The controllers were additionally calling `mbgl_frontend_destroy` on the already-freed pointer, causing a double-free on every normal teardown path. Fixed by adding `MbglFrontend.TransferOwnership()` (zeroes the handle), called from the `MbglMap` constructor immediately after `mbgl_map_create` succeeds. `MbglFrontend.Dispose()` is now a safe no-op after ownership transfer. All three controllers (Windows, Android, MaciOS) updated to not call `_frontend.Dispose()` after `_map.Dispose()`.
