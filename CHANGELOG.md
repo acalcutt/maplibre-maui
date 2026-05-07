@@ -7,6 +7,12 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
+## 1.1.10
+### 🐞 Bug fixes
+- **Windows: attribution text no longer overflows the map edge.** Long attribution strings are now capped to the map width and wrapped using `DrawTextW` with `DT_WORDBREAK`. The overlay HWND is sized to the measured wrapped height so the background box fits correctly.
+- **Windows: nav and attribution overlays no longer flicker (true fix).** The previous rect-caching fix skipped `SetWindowPos` when position was unchanged, but `BringWindowToTop` was still called every 16ms frame — any Z-order change forces `WM_PAINT`. Fixed by setting both overlays as `HWND_TOPMOST` once at creation so they permanently render above the OpenGL child window without per-frame intervention. `BringWindowToTop` removed from `PositionOverlays` entirely. The GDI `DrawTextW` measurement is also cached and only recalculated when the text or available width changes.
+- **Windows: attribution `&copy;` and other HTML entities now render as proper characters.** `StripHtmlTags` removed `<a>` tags but left HTML entities as raw text. Added `DecodeHtmlEntities()` to convert `&copy;` → ©, `&amp;`, `&reg;`, `&trade;`, `&mdash;`, `&ndash;`, `&nbsp;`, `&lt;`, and `&gt;`.
+
 ## 1.1.9
 ### 🐞 Bug fixes
 - **Windows: nav and attribution overlays no longer flicker.** `PositionOverlays()` is called on every 16ms render tick; even with `WM_ERASEBKGND` suppressed, calling `SetWindowPos` each tick forces a `WM_PAINT` on the overlay window even when the map hasn’t moved. Fixed by caching the last computed rect for each overlay (`_lastNavRect`, `_lastAttrRect`) and skipping `SetWindowPos` when the position and size are unchanged.
