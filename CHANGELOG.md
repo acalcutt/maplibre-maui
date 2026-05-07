@@ -7,6 +7,10 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
+## 1.1.9
+### 🐞 Bug fixes
+- **Windows: nav and attribution overlays no longer flicker.** `PositionOverlays()` is called on every 16ms render tick; even with `WM_ERASEBKGND` suppressed, calling `SetWindowPos` each tick forces a `WM_PAINT` on the overlay window even when the map hasn’t moved. Fixed by caching the last computed rect for each overlay (`_lastNavRect`, `_lastAttrRect`) and skipping `SetWindowPos` when the position and size are unchanged.
+
 ## 1.1.8
 ### ✨ Features and improvements
 - **`ShowNavigationControls` now defaults to `false`** (opt-in, consistent with maplibre-gl-js where `NavigationControl` must be explicitly added). Set `ShowNavigationControls="True"` in your `MapLibreMap` to enable the overlay.
