@@ -678,7 +678,7 @@ public class MapLibreMapController : IMapLibreMapController
         int w = Math.Max(1, (int)(View.ActualWidth  * _pixelRatio));
         int h = Math.Max(1, (int)(View.ActualHeight * _pixelRatio));
 
-        SetWindowPos(_childHwnd, HWND_TOP, x, y, w, h, SWP_NOACTIVATE);
+        SetWindowPos(_childHwnd, IntPtr.Zero, x, y, w, h, SWP_NOACTIVATE | SWP_NOZORDER);
         PositionOverlays();  // keep overlay windows tracking the map
 
         if (_logPositionCount < 5)
@@ -988,9 +988,9 @@ public class MapLibreMapController : IMapLibreMapController
             _effectiveParentHwnd, IntPtr.Zero, GetModuleHandleW(IntPtr.Zero), IntPtr.Zero);
         if (_navHwnd != IntPtr.Zero)
         {
-            // Make permanently topmost so it always renders above the GL child window
-            // without needing BringWindowToTop on every frame.
-            SetWindowPos(_navHwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            // Place nav overlay just above the GL child in z-order (not TOPMOST —
+            // that would render above every other app window on the desktop).
+            SetWindowPos(_navHwnd, _childHwnd, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             SetWindowLongPtr(_navHwnd, GWLP_WNDPROC,
                 Marshal.GetFunctionPointerForDelegate(_navWndProc));
             // Create the GDI font for nav buttons once.
@@ -1011,8 +1011,8 @@ public class MapLibreMapController : IMapLibreMapController
         {
             // 92% opacity — matches maplibre-gl-js attribution style.
             SetLayeredWindowAttributes(_attrHwnd, 0, 235, LWA_ALPHA);
-            // Make permanently topmost so it always renders above the GL child window.
-            SetWindowPos(_attrHwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            // Place attr overlay just above the GL child (and nav) in z-order.
+            SetWindowPos(_attrHwnd, _childHwnd, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             SetWindowLongPtr(_attrHwnd, GWLP_WNDPROC,
                 Marshal.GetFunctionPointerForDelegate(_attrWndProc));
             int fontH = -(int)(_pixelRatio * AttrFontSizePt);
@@ -1036,14 +1036,14 @@ public class MapLibreMapController : IMapLibreMapController
                 (IntPtr)((_showNavControls && _initialized)
                     ? (style | WS_VISIBLE)
                     : (style & ~WS_VISIBLE)));
-            SetWindowPos(_navHwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW_OR_HIDE(
+            SetWindowPos(_navHwnd, IntPtr.Zero, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW_OR_HIDE(
                     _showNavControls && _initialized));
         }
         if (_attrHwnd != IntPtr.Zero)
         {
-            SetWindowPos(_attrHwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW_OR_HIDE(
+            SetWindowPos(_attrHwnd, IntPtr.Zero, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW_OR_HIDE(
                     _showAttrControl && _initialized && _attrText.Length > 0));
         }
     }
@@ -1078,7 +1078,7 @@ public class MapLibreMapController : IMapLibreMapController
             if (nr != _lastNavRect)
             {
                 _lastNavRect = nr;
-                SetWindowPos(_navHwnd, HWND_TOPMOST, navX, navY, btnSizePx, panelH, SWP_NOACTIVATE);
+                SetWindowPos(_navHwnd, IntPtr.Zero, navX, navY, btnSizePx, panelH, SWP_NOACTIVATE | SWP_NOZORDER);
                 InvalidateRect(_navHwnd, IntPtr.Zero, true);
             }
         }
@@ -1114,7 +1114,7 @@ public class MapLibreMapController : IMapLibreMapController
             if (ar != _lastAttrRect)
             {
                 _lastAttrRect = ar;
-                SetWindowPos(_attrHwnd, HWND_TOPMOST, attrX, attrY, attrW, attrH, SWP_NOACTIVATE);
+                SetWindowPos(_attrHwnd, IntPtr.Zero, attrX, attrY, attrW, attrH, SWP_NOACTIVATE | SWP_NOZORDER);
                 InvalidateRect(_attrHwnd, IntPtr.Zero, true);
             }
         }
