@@ -285,7 +285,8 @@ public class MapLibreMapController : IMapLibreMapController
     private const uint SWP_NOACTIVATE      = 0x0010;
     private const uint SWP_NOMOVE          = 0x0002;
     private const uint SWP_NOSIZE          = 0x0001;
-    private static readonly IntPtr HWND_TOP = IntPtr.Zero;
+    private static readonly IntPtr HWND_TOP     = IntPtr.Zero;
+    private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
 
     private const string GlWindowClass = "MapLibreCabiGL";
     private static WndProcDelegate? _wndProcKeepAlive;
@@ -376,6 +377,10 @@ public class MapLibreMapController : IMapLibreMapController
     // Cached overlay positions — skip SetWindowPos when nothing changed (prevents repaint flicker)
     private (int x, int y, int w, int h) _lastNavRect;
     private (int x, int y, int w, int h) _lastAttrRect;
+    // Cached attr text measurement — only re-measure via GDI when text or available width changes
+    private string _lastMeasuredAttrText = string.Empty;
+    private int    _lastMeasuredAttrInnerW;
+    private (int cx, int cy) _cachedAttrMeasure;
 
     // Pumps the libuv run loop on the UI thread. Without this, async HTTP responses
     // for style/tile downloads are never delivered and StyleLoaded never fires.
@@ -983,6 +988,9 @@ public class MapLibreMapController : IMapLibreMapController
             _effectiveParentHwnd, IntPtr.Zero, GetModuleHandleW(IntPtr.Zero), IntPtr.Zero);
         if (_navHwnd != IntPtr.Zero)
         {
+            // Make permanently topmost so it always renders above the GL child window
+            // without needing BringWindowToTop on every frame.
+            SetWindowPos(_navHwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             SetWindowLongPtr(_navHwnd, GWLP_WNDPROC,
                 Marshal.GetFunctionPointerForDelegate(_navWndProc));
             // Create the GDI font for nav buttons once.
@@ -1003,6 +1011,8 @@ public class MapLibreMapController : IMapLibreMapController
         {
             // 92% opacity — matches maplibre-gl-js attribution style.
             SetLayeredWindowAttributes(_attrHwnd, 0, 235, LWA_ALPHA);
+            // Make permanently topmost so it always renders above the GL child window.
+            SetWindowPos(_attrHwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             SetWindowLongPtr(_attrHwnd, GWLP_WNDPROC,
                 Marshal.GetFunctionPointerForDelegate(_attrWndProc));
             int fontH = -(int)(_pixelRatio * AttrFontSizePt);
@@ -1026,13 +1036,13 @@ public class MapLibreMapController : IMapLibreMapController
                 (IntPtr)((_showNavControls && _initialized)
                     ? (style | WS_VISIBLE)
                     : (style & ~WS_VISIBLE)));
-            SetWindowPos(_navHwnd, HWND_TOP, 0, 0, 0, 0,
+            SetWindowPos(_navHwnd, HWND_TOPMOST, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW_OR_HIDE(
                     _showNavControls && _initialized));
         }
         if (_attrHwnd != IntPtr.Zero)
         {
-            SetWindowPos(_attrHwnd, HWND_TOP, 0, 0, 0, 0,
+            SetWindowPos(_attrHwnd, HWND_TOPMOST, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW_OR_HIDE(
                     _showAttrControl && _initialized && _attrText.Length > 0));
         }
@@ -1068,9 +1078,8 @@ public class MapLibreMapController : IMapLibreMapController
             if (nr != _lastNavRect)
             {
                 _lastNavRect = nr;
-                SetWindowPos(_navHwnd, HWND_TOP, navX, navY, btnSizePx, panelH, SWP_NOACTIVATE);
+                SetWindowPos(_navHwnd, HWND_TOPMOST, navX, navY, btnSizePx, panelH, SWP_NOACTIVATE);
             }
-            BringWindowToTop(_navHwnd);
         }
 
         if (_attrHwnd != IntPtr.Zero && _showAttrControl && _attrText.Length > 0)
@@ -1082,25 +1091,30 @@ public class MapLibreMapController : IMapLibreMapController
             int maxAttrW = Math.Max(120, mapW - marginPx * 2);
             int innerW   = maxAttrW - padH * 2;
 
-            // Measure wrapped text height via DrawTextW DT_CALCRECT.
-            var hdc     = GetDC(IntPtr.Zero);
-            var oldFont = SelectObject(hdc, _attrFont != IntPtr.Zero ? _attrFont : IntPtr.Zero);
-            var calcRc  = new RECT { Left = 0, Top = 0, Right = innerW, Bottom = 0 };
-            DrawTextW(hdc, _attrText, _attrText.Length, ref calcRc, DT_LEFT | DT_WORDBREAK | DT_CALCRECT | DT_NOPREFIX);
-            SelectObject(hdc, oldFont);
-            ReleaseDC(IntPtr.Zero, hdc);
+            // Only re-measure via GDI when text or available width actually changes.
+            if (_attrText != _lastMeasuredAttrText || innerW != _lastMeasuredAttrInnerW)
+            {
+                var hdc     = GetDC(IntPtr.Zero);
+                var oldFont = SelectObject(hdc, _attrFont != IntPtr.Zero ? _attrFont : IntPtr.Zero);
+                var calcRc  = new RECT { Left = 0, Top = 0, Right = innerW, Bottom = 0 };
+                DrawTextW(hdc, _attrText, _attrText.Length, ref calcRc, DT_LEFT | DT_WORDBREAK | DT_CALCRECT | DT_NOPREFIX);
+                SelectObject(hdc, oldFont);
+                ReleaseDC(IntPtr.Zero, hdc);
+                _cachedAttrMeasure     = (calcRc.Right, calcRc.Bottom);
+                _lastMeasuredAttrText  = _attrText;
+                _lastMeasuredAttrInnerW = innerW;
+            }
 
-            int attrW = calcRc.Right  + padH * 2;
-            int attrH = calcRc.Bottom + padV * 2;
+            int attrW = _cachedAttrMeasure.cx + padH * 2;
+            int attrH = _cachedAttrMeasure.cy + padV * 2;
             int attrX = wr.Left + mapW - attrW - marginPx;
             int attrY = wr.Top  + mapH - attrH - marginPx;
             var ar = (attrX, attrY, attrW, attrH);
             if (ar != _lastAttrRect)
             {
                 _lastAttrRect = ar;
-                SetWindowPos(_attrHwnd, HWND_TOP, attrX, attrY, attrW, attrH, SWP_NOACTIVATE);
+                SetWindowPos(_attrHwnd, HWND_TOPMOST, attrX, attrY, attrW, attrH, SWP_NOACTIVATE);
             }
-            BringWindowToTop(_attrHwnd);
         }
     }
 
