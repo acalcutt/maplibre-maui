@@ -1341,7 +1341,22 @@ public class MapLibreMapController : IMapLibreMapController
             else if (c == '>') inTag = false;
             else if (!inTag)   sb.Append(c);
         }
-        return sb.ToString().Trim();
+        return DecodeHtmlEntities(sb.ToString().Trim());
+    }
+
+    private static string DecodeHtmlEntities(string text)
+    {
+        if (string.IsNullOrEmpty(text) || !text.Contains('&')) return text;
+        return text
+            .Replace("&amp;",   "&")
+            .Replace("&copy;",  "\u00A9")
+            .Replace("&reg;",   "\u00AE")
+            .Replace("&trade;", "\u2122")
+            .Replace("&mdash;", "\u2014")
+            .Replace("&ndash;", "\u2013")
+            .Replace("&nbsp;",  "\u00A0")
+            .Replace("&lt;",    "<")
+            .Replace("&gt;",    ">");
     }
 
     public void SetShowNavigationControls(bool show)
