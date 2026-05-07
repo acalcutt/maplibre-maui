@@ -7,6 +7,11 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
+## 1.1.11
+### 🐞 Bug fixes
+- **Windows: nav and attribution overlays no longer appear above other application windows.** `HWND_TOPMOST` places a window above every other window on the entire desktop, not just above the OpenGL child. Replaced with normal z-order: overlays are inserted just above `_childHwnd` at creation (`hWndInsertAfter = _childHwnd`), and all subsequent `SetWindowPos` calls use `SWP_NOZORDER` so relative order is never disturbed. `UpdateChildWindowPosition` also uses `SWP_NOZORDER` so the GL child no longer jumps above the overlays on every render tick.
+- **Windows: overlay content now repaints correctly after window resize.** When the window was resized, `PositionOverlays` called `SetWindowPos` with the new HWND size but never invalidated the client area, leaving old GDI content clipped (on shrink) or stale (on expand). Fixed by calling `InvalidateRect` immediately after `SetWindowPos` whenever the rect changes.
+
 ## 1.1.10
 ### 🐞 Bug fixes
 - **Windows: attribution text no longer overflows the map edge.** Long attribution strings are now capped to the map width and wrapped using `DrawTextW` with `DT_WORDBREAK`. The overlay HWND is sized to the measured wrapped height so the background box fits correctly.
