@@ -605,6 +605,10 @@ public class MapLibreMapController : IMapLibreMapController
                 OnStyleLoadedReceived?.Invoke(new Maps.Style(null));
                 break;
             case "onDidBecomeIdle":
+                // Refresh attribution on idle: TileJSON sources may have finished
+                // loading *after* onDidFinishLoadingStyle, so this is the earliest
+                // reliable point at which Source::getAttribution() is populated.
+                if (_attrText.Length == 0) RefreshAttributionText();
                 OnDidBecomeIdleReceived?.Invoke();
                 break;
             case "onCameraIsChanging":
