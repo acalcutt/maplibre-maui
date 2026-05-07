@@ -258,4 +258,6 @@ BSD 2-Clause — see [LICENSE](/LICENSE).
 
 Portions copyright © 2025 Benjamin Trounson (original [maplibre-maui](https://github.com/btrounson/maplibre-maui), MIT License).
 
+The C ABI design in `native/` was informed by [maplibre-native-ffi](https://github.com/maplibre/maplibre-native-ffi) (MapLibre contributors, BSD 2-Clause License). Specifically: the typed opaque handle pattern, `mbgl_status_t` return codes, thread-local `mbgl_get_last_error()`, `MBGL_CABI_NOEXCEPT` annotation, debug options bitmask, and log callback design were adapted from that project.
+
 This project links against [MapLibre Native](https://github.com/maplibre/maplibre-native), which is also BSD 2-Clause licensed.
