@@ -365,6 +365,9 @@ public class MapLibreMapController : IMapLibreMapController
     private const int AttrPadV        = 3;    // vertical text padding
     private const int AttrFontSizePt  = 11;
     private const string OverlayClass = "MapLibreOverlay";
+    // Cached overlay positions — skip SetWindowPos when nothing changed (prevents repaint flicker)
+    private (int x, int y, int w, int h) _lastNavRect;
+    private (int x, int y, int w, int h) _lastAttrRect;
 
     // Pumps the libuv run loop on the UI thread. Without this, async HTTP responses
     // for style/tile downloads are never delivered and StyleLoaded never fires.
@@ -1046,30 +1049,38 @@ public class MapLibreMapController : IMapLibreMapController
 
         if (_navHwnd != IntPtr.Zero && _showNavControls)
         {
-            // Three buttons: zoom-in, zoom-out, compass — each NavButtonSize wide.
             int panelH = btnSizePx * 3 + 2;  // +2 for separator lines
             int navX   = wr.Left + mapW - btnSizePx - marginPx;
             int navY   = wr.Top  + marginPx;
-            SetWindowPos(_navHwnd, HWND_TOP, navX, navY, btnSizePx, panelH, SWP_NOACTIVATE);
+            var nr = (navX, navY, btnSizePx, panelH);
+            if (nr != _lastNavRect)
+            {
+                _lastNavRect = nr;
+                SetWindowPos(_navHwnd, HWND_TOP, navX, navY, btnSizePx, panelH, SWP_NOACTIVATE);
+            }
             BringWindowToTop(_navHwnd);
         }
 
         if (_attrHwnd != IntPtr.Zero && _showAttrControl && _attrText.Length > 0)
         {
-            // Measure text width via temporary HDC.
             var hdc = GetDC(IntPtr.Zero);
             var oldFont = SelectObject(hdc, _attrFont != IntPtr.Zero ? _attrFont : IntPtr.Zero);
             GetTextExtentPoint32W(hdc, _attrText, _attrText.Length, out var sz);
             SelectObject(hdc, oldFont);
             ReleaseDC(IntPtr.Zero, hdc);
 
-            int padH = (int)(AttrPadH * _pixelRatio);
-            int padV = (int)(AttrPadV * _pixelRatio);
+            int padH  = (int)(AttrPadH * _pixelRatio);
+            int padV  = (int)(AttrPadV * _pixelRatio);
             int attrW = sz.cx + padH * 2;
             int attrH = sz.cy + padV * 2;
             int attrX = wr.Left + mapW - attrW - marginPx;
             int attrY = wr.Top  + mapH - attrH - marginPx;
-            SetWindowPos(_attrHwnd, HWND_TOP, attrX, attrY, attrW, attrH, SWP_NOACTIVATE);
+            var ar = (attrX, attrY, attrW, attrH);
+            if (ar != _lastAttrRect)
+            {
+                _lastAttrRect = ar;
+                SetWindowPos(_attrHwnd, HWND_TOP, attrX, attrY, attrW, attrH, SWP_NOACTIVATE);
+            }
             BringWindowToTop(_attrHwnd);
         }
     }
@@ -1088,6 +1099,8 @@ public class MapLibreMapController : IMapLibreMapController
         if (_attrHwnd != IntPtr.Zero) { DestroyWindow(_attrHwnd); _attrHwnd = IntPtr.Zero; }
         _navWndProc  = null;
         _attrWndProc = null;
+        _lastNavRect  = default;
+        _lastAttrRect = default;
     }
 
     // ── Nav overlay WndProc ────────────────────────────────────────────────────
