@@ -1250,6 +1250,7 @@ public class MapLibreMapController : IMapLibreMapController
         if (_map == null) return;
         var center = GetCenter();
         EaseTo(center.Latitude, center.Longitude, GetZoom() + 1, GetBearing(), GetPitch(), durationMs: 250);
+        _renderNeedsUpdate = true;
     }
 
     private void ZoomOut()
@@ -1257,13 +1258,19 @@ public class MapLibreMapController : IMapLibreMapController
         if (_map == null) return;
         var center = GetCenter();
         EaseTo(center.Latitude, center.Longitude, GetZoom() - 1, GetBearing(), GetPitch(), durationMs: 250);
+        _renderNeedsUpdate = true;
     }
 
     private void ResetNorth()
     {
         if (_map == null) return;
         var center = GetCenter();
-        EaseTo(center.Latitude, center.Longitude, GetZoom(), bearing: 0, pitch: GetPitch(), durationMs: 250);
+        // Match maplibre-gl-js: first click resets bearing to 0 (keeping pitch);
+        // if bearing is already ~0, also reset pitch to 0.
+        double currentBearing = GetBearing();
+        double newPitch = Math.Abs(currentBearing) < 0.5 ? 0 : GetPitch();
+        EaseTo(center.Latitude, center.Longitude, GetZoom(), bearing: 0, pitch: newPitch, durationMs: 300);
+        _renderNeedsUpdate = true;
     }
 
     /// <summary>
