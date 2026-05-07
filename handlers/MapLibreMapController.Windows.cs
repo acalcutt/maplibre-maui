@@ -126,6 +126,14 @@ public class MapLibreMapController : IMapLibreMapController
     [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
     private static extern bool TextOutW(IntPtr hdc, int x, int y, string text, int count);
 
+    private const uint DT_LEFT      = 0x00000000;
+    private const uint DT_WORDBREAK = 0x00000010;
+    private const uint DT_CALCRECT  = 0x00000400;
+    private const uint DT_NOPREFIX  = 0x00000800;
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int DrawTextW(IntPtr hdc, string lpchText, int cchText, ref RECT lprc, uint uFormat);
+
     [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr CreateFontW(int cHeight, int cWidth, int cEscapement, int cOrientation,
         int cWeight, uint bItalic, uint bUnderline, uint bStrikeOut, uint iCharSet,
@@ -1067,16 +1075,23 @@ public class MapLibreMapController : IMapLibreMapController
 
         if (_attrHwnd != IntPtr.Zero && _showAttrControl && _attrText.Length > 0)
         {
-            var hdc = GetDC(IntPtr.Zero);
+            int padH = (int)(AttrPadH * _pixelRatio);
+            int padV = (int)(AttrPadV * _pixelRatio);
+
+            // Cap width so attribution never overflows the map edge.
+            int maxAttrW = Math.Max(120, mapW - marginPx * 2);
+            int innerW   = maxAttrW - padH * 2;
+
+            // Measure wrapped text height via DrawTextW DT_CALCRECT.
+            var hdc     = GetDC(IntPtr.Zero);
             var oldFont = SelectObject(hdc, _attrFont != IntPtr.Zero ? _attrFont : IntPtr.Zero);
-            GetTextExtentPoint32W(hdc, _attrText, _attrText.Length, out var sz);
+            var calcRc  = new RECT { Left = 0, Top = 0, Right = innerW, Bottom = 0 };
+            DrawTextW(hdc, _attrText, _attrText.Length, ref calcRc, DT_LEFT | DT_WORDBREAK | DT_CALCRECT | DT_NOPREFIX);
             SelectObject(hdc, oldFont);
             ReleaseDC(IntPtr.Zero, hdc);
 
-            int padH  = (int)(AttrPadH * _pixelRatio);
-            int padV  = (int)(AttrPadV * _pixelRatio);
-            int attrW = sz.cx + padH * 2;
-            int attrH = sz.cy + padV * 2;
+            int attrW = calcRc.Right  + padH * 2;
+            int attrH = calcRc.Bottom + padV * 2;
             int attrX = wr.Left + mapW - attrW - marginPx;
             int attrY = wr.Top  + mapH - attrH - marginPx;
             var ar = (attrX, attrY, attrW, attrH);
@@ -1237,7 +1252,8 @@ public class MapLibreMapController : IMapLibreMapController
             SetBkMode(hdc, TRANSPARENT);
             SetTextColor(hdc, 0x00555555);
             var oldFont = SelectObject(hdc, _attrFont != IntPtr.Zero ? _attrFont : IntPtr.Zero);
-            TextOutW(hdc, padH, padV, _attrText, _attrText.Length);
+            var textRc  = new RECT { Left = padH, Top = padV, Right = rc.Right - padH, Bottom = rc.Bottom - padV };
+            DrawTextW(hdc, _attrText, _attrText.Length, ref textRc, DT_LEFT | DT_WORDBREAK | DT_NOPREFIX);
             SelectObject(hdc, oldFont);
         }
         finally { EndPaint(hWnd, ref ps); }
