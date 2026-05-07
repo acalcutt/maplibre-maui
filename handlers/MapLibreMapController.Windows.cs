@@ -1079,6 +1079,7 @@ public class MapLibreMapController : IMapLibreMapController
             {
                 _lastNavRect = nr;
                 SetWindowPos(_navHwnd, HWND_TOPMOST, navX, navY, btnSizePx, panelH, SWP_NOACTIVATE);
+                InvalidateRect(_navHwnd, IntPtr.Zero, true);
             }
         }
 
@@ -1114,6 +1115,7 @@ public class MapLibreMapController : IMapLibreMapController
             {
                 _lastAttrRect = ar;
                 SetWindowPos(_attrHwnd, HWND_TOPMOST, attrX, attrY, attrW, attrH, SWP_NOACTIVATE);
+                InvalidateRect(_attrHwnd, IntPtr.Zero, true);
             }
         }
     }
