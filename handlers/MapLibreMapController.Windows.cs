@@ -1614,7 +1614,7 @@ public class MapLibreMapController : IMapLibreMapController
         => _style?.GetLayer(layerId)?.GetVisibility() ?? false;
 
     public void SetLayerVisibility(string layerId, bool visible)
-        => _style?.GetLayer(layerId)?.SetVisible(visible);────
+        => _style?.GetLayer(layerId)?.SetVisible(visible);
 
     public void OnPointerWheelChanged(double delta, double cx, double cy)
         => _map?.OnScroll(delta, cx, cy);
