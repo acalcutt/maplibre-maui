@@ -61,7 +61,11 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
 	</ItemGroup>
 
-	<ItemGroup>
+	<ItemGroup Condition="'$(UseLocalPackages)' != 'true'">
 	  <ProjectReference Include="..\handlers\Maui.Maplibre.Handlers.csproj" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(UseLocalPackages)' == 'true'">
+	  <PackageReference Include="Maui.Maplibre.Handlers" Version="*-*" />
 	</ItemGroup>
 </Project>
