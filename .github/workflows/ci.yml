@@ -150,15 +150,11 @@ jobs:
       - name: Restore workloads
         run: dotnet workload install android
 
-      - name: Restore NuGet packages (Android only)
-        run: dotnet restore sample/MauiSample.csproj -f net9.0-android
-
       - name: Publish sample (Android)
         run: |
           dotnet publish sample/MauiSample.csproj \
             -f net9.0-android \
             -c Release \
-            --no-restore \
             -p:AndroidPackageFormats=apk \
             -p:AndroidKeyStore=false \
             -o sample/bin/publish-android
