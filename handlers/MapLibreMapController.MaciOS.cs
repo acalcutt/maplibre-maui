@@ -475,6 +475,31 @@ public class MapLibreMapController : IMapLibreMapController
     public (double Lat, double Lon)[] LatLngsForPixels(IReadOnlyList<(double X, double Y)> pixels)
         => _map?.LatLngsForPixels(pixels) ?? [];
 
+    // ── Debug overlays ────────────────────────────────────────────────────────────
+
+    public int  GetDebugOptions() => _map?.GetDebugOptions() ?? 0;
+    public void SetDebugOptions(int options) => _map?.SetDebugOptions(options);
+
+    // ── Style inspection ───────────────────────────────────────────────────
+
+    public string   GetStyleUrl()       => _style?.GetUrl()       ?? string.Empty;
+    public string[] GetStyleSourceIds() => _style?.GetSourceIds() ?? [];
+    public string[] GetStyleLayerIds()  => _style?.GetLayerIds()  ?? [];
+
+    // ── Layer read-back + visibility ──────────────────────────────────────────
+
+    public string? GetLayerPaintProperty(string layerId, string name)
+        => _style?.GetLayer(layerId)?.GetPaintProperty(name);
+
+    public string? GetLayerLayoutProperty(string layerId, string name)
+        => _style?.GetLayer(layerId)?.GetLayoutProperty(name);
+
+    public bool GetLayerVisibility(string layerId)
+        => _style?.GetLayer(layerId)?.GetVisibility() ?? false;
+
+    public void SetLayerVisibility(string layerId, bool visible)
+        => _style?.GetLayer(layerId)?.SetVisible(visible);
+
     // -- Cleanup ---------------------------------------------------------------
 
     private void DisposeNative()

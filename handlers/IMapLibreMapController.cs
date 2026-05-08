@@ -188,4 +188,28 @@ public interface IMapLibreMapController : IMapLibreMapOptionsSink
 
     (double Lat, double Lon)[] LatLngsForPixels(
         IReadOnlyList<(double X, double Y)> pixels);
+
+    // ── Debug overlays ────────────────────────────────────────────────────────
+    /// <summary>Get current debug overlay bitmask (see <c>MbglDebugOptions</c>).</summary>
+    int  GetDebugOptions();
+    /// <summary>Set debug overlay bitmask. Use 0 to disable all overlays.</summary>
+    void SetDebugOptions(int options);
+
+    // ── Style inspection ──────────────────────────────────────────────────────
+    /// <summary>URL from which the current style was loaded, or empty string.</summary>
+    string   GetStyleUrl();
+    /// <summary>All source IDs in the current style, or empty array if no style is loaded.</summary>
+    string[] GetStyleSourceIds();
+    /// <summary>All layer IDs in draw order, or empty array if no style is loaded.</summary>
+    string[] GetStyleLayerIds();
+
+    // ── Layer read-back + visibility ──────────────────────────────────────────
+    /// <summary>Returns the JSON-encoded value of a paint property, or null if not set.</summary>
+    string? GetLayerPaintProperty(string layerId, string name);
+    /// <summary>Returns the JSON-encoded value of a layout property, or null if not set.</summary>
+    string? GetLayerLayoutProperty(string layerId, string name);
+    /// <summary>Returns true if the layer is currently visible.</summary>
+    bool GetLayerVisibility(string layerId);
+    /// <summary>Show or hide an existing layer.</summary>
+    void SetLayerVisibility(string layerId, bool visible);
 }

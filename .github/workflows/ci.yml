@@ -110,3 +110,65 @@ jobs:
           name: nuget-packages-ci
           path: artifacts/*.nupkg
           retention-days: 3
+
+  # ── Sample app builds (validate end-to-end compilation) ───────────────────
+  sample:
+    name: Sample — all platforms
+    runs-on: macos-15
+    needs: [version, pack]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 8 and 9 SDKs
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Download NuGet packages
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages-ci
+          path: local-feed
+
+      - name: Add local NuGet feed
+        run: dotnet nuget add source $(pwd)/local-feed --name local-ci
+
+      - name: Restore workloads
+        run: dotnet workload restore sample/MauiSample.csproj
+
+      - name: Build sample (Android)
+        run: |
+          dotnet build sample/MauiSample.csproj \
+            -f net9.0-android \
+            -c Release \
+            -p:EnableWindowsTargeting=true \
+            -p:UseLocalPackages=true
+
+      - name: Build sample (iOS)
+        run: |
+          dotnet build sample/MauiSample.csproj \
+            -f net9.0-ios \
+            -c Release \
+            -p:EnableWindowsTargeting=true \
+            -p:RuntimeIdentifier=ios-arm64 \
+            -p:UseLocalPackages=true
+
+      - name: Build sample (macCatalyst)
+        run: |
+          dotnet build sample/MauiSample.csproj \
+            -f net9.0-maccatalyst \
+            -c Release \
+            -p:EnableWindowsTargeting=true \
+            -p:UseLocalPackages=true
+
+      - name: Build sample (Windows)
+        run: |
+          dotnet build sample/MauiSample.csproj \
+            -f net9.0-windows10.0.19041.0 \
+            -c Release \
+            -p:EnableWindowsTargeting=true \
+            -p:UseLocalPackages=true
+
