@@ -148,7 +148,7 @@ jobs:
           find native-artifacts/native-android-x86_64   -name "libmbgl-cabi.so" -exec cp {} $N/android-x64/ \;
 
       - name: Restore workloads
-        run: dotnet workload install android
+        run: dotnet workload install maui-android
 
       - name: Publish sample (Android)
         run: |
@@ -157,6 +157,7 @@ jobs:
             -c Release \
             -p:AndroidPackageFormats=apk \
             -p:AndroidKeyStore=false \
+            -p:SuppressTfmSupportBuildWarnings=true \
             -o sample/bin/publish-android
 
       - name: Upload Android APK
