@@ -235,6 +235,7 @@ public sealed class MbglSource
         NativeMethods.FreeString(ptr);
         return result;
     }
+}
 
 // ── Layer handle ──────────────────────────────────────────────────────────────
 
