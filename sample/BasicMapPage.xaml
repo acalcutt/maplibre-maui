@@ -32,6 +32,12 @@
                 <Button Text="Sydney"  Clicked="OnCityClicked" CommandParameter="Sydney"  />
             </FlexLayout>
 
+            <!-- Debug overlay toggle -->
+            <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
+                <Label Text="Debug Overlays:" FontAttributes="Bold" VerticalOptions="Center" />
+                <Switch x:Name="DebugSwitch" Toggled="OnDebugToggled" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
             <!-- Status line -->
             <Label Text="{Binding Status}" FontSize="12" TextColor="Gray" />
 
