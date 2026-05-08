@@ -242,7 +242,7 @@ jobs:
         run: dotnet workload restore sample/MauiSample.csproj
 
       - name: Restore NuGet packages
-        run: dotnet restore sample/MauiSample.csproj
+        run: dotnet restore sample/MauiSample.csproj -p:EnableWindowsTargeting=true
 
       - name: Build sample (iOS)
         run: |
