@@ -31,8 +31,8 @@ public partial class BasicMapPage : ContentPage
     private void OnDebugToggled(object sender, ToggledEventArgs e)
     {
         var controller = (Map.Handler as MapLibreMapHandler)?.Controller;
-        // TileBorders (0x01) | Collision (0x08)
-        controller?.SetDebugOptions(e.Value ? 0x09 : 0);
+        // TileBorders (0x02) | Collision (0x10)
+        controller?.SetDebugOptions(e.Value ? 0x12 : 0);
         _vm.Status = e.Value ? "Debug overlays ON" : "Debug overlays OFF";
     }
 }

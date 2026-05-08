@@ -239,7 +239,7 @@ MapLibre Native has built-in debug overlays controlled by a bitmask:
 
 ```csharp
 // Enable tile borders + collision boxes
-controller.SetDebugOptions(0x01 | 0x08);
+controller.SetDebugOptions(0x02 | 0x10);
 
 // Read current state
 int current = controller.GetDebugOptions();
