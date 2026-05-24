@@ -68,4 +68,15 @@
 	<ItemGroup Condition="'$(UseLocalPackages)' == 'true'">
 	  <PackageReference Include="Maui.Maplibre.Handlers" Version="*-*" />
 	</ItemGroup>
+
+	<!-- Exclude sibling sample projects that live under this directory.
+	     The MAUI SDK globs **/*.cs and **/*.xaml, so without these Remove
+	     items it would try to compile WPF/console-only code on every TFM. -->
+	<ItemGroup>
+	  <Compile          Remove="ConsoleExample\**;WpfExample\**" />
+	  <EmbeddedResource Remove="ConsoleExample\**;WpfExample\**" />
+	  <None             Remove="ConsoleExample\**;WpfExample\**" />
+	  <MauiXaml         Remove="ConsoleExample\**;WpfExample\**" />
+	  <Page             Remove="ConsoleExample\**;WpfExample\**" />
+	</ItemGroup>
 </Project>
