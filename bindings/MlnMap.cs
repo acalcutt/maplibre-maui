@@ -30,7 +30,7 @@ public sealed class MlnMap : IDisposable
         unsafe
         {
             var opts = MlnMethods.MapOptionsDefault();
-            opts.Mode = (uint)mode;
+            opts.MapMode = (uint)mode;
             MlnMethods.ThrowIfFailed(
                 MlnMethods.MapCreate(runtime.Handle, &opts, out var handle),
                 nameof(MlnMap));
@@ -64,13 +64,13 @@ public sealed class MlnMap : IDisposable
         unsafe
         {
             var desc = MlnMethods.MetalSurfaceDescriptorDefault();
-            desc.Layer       = layer;
-            desc.Width       = width;
-            desc.Height      = height;
-            desc.ScaleFactor = scaleFactor;
-            desc.Device      = device;
+            desc.Layer              = layer;
+            desc.Extent.Width       = width;
+            desc.Extent.Height      = height;
+            desc.Extent.ScaleFactor = scaleFactor;
+            desc.Context.Device     = device;
             MlnMethods.ThrowIfFailed(
-                MlnMethods.MapAttachMetalSurfaceSession(Handle, &desc, out _sessionHandle),
+                MlnMethods.MetalSurfaceAttach(Handle, &desc, out _sessionHandle),
                 nameof(AttachMetalSurface));
         }
     }
@@ -88,18 +88,62 @@ public sealed class MlnMap : IDisposable
         unsafe
         {
             var desc = MlnMethods.VulkanSurfaceDescriptorDefault();
-            desc.Instance                  = instance;
-            desc.PhysicalDevice            = physicalDevice;
-            desc.Device                    = device;
-            desc.GraphicsQueue             = graphicsQueue;
-            desc.GraphicsQueueFamilyIndex  = graphicsQueueFamilyIndex;
-            desc.Surface                   = vkSurface;
+            desc.Context.Instance                 = instance;
+            desc.Context.PhysicalDevice           = physicalDevice;
+            desc.Context.Device                   = device;
+            desc.Context.GraphicsQueue            = graphicsQueue;
+            desc.Context.GraphicsQueueFamilyIndex = graphicsQueueFamilyIndex;
+            desc.Surface                          = vkSurface;
+            desc.Extent.Width                     = width;
+            desc.Extent.Height                    = height;
+            desc.Extent.ScaleFactor               = scaleFactor;
+            MlnMethods.ThrowIfFailed(
+                MlnMethods.VulkanSurfaceAttach(Handle, &desc, out _sessionHandle),
+                nameof(AttachVulkanSurface));
+        }
+    }
+
+    /// <summary>
+    /// Attaches an EGL render session (Android / Linux). Requires an OpenGL build.
+    /// </summary>
+    public void AttachEglSurface(
+        IntPtr display, IntPtr context, IntPtr surface,
+        uint width, uint height, double scaleFactor)
+    {
+        unsafe
+        {
+            var desc = MlnMethods.EglSurfaceDescriptorDefault();
+            desc.Display     = display;
+            desc.Context     = context;
+            desc.Surface     = surface;
             desc.Width       = width;
             desc.Height      = height;
             desc.ScaleFactor = scaleFactor;
             MlnMethods.ThrowIfFailed(
-                MlnMethods.MapAttachVulkanSurfaceSession(Handle, &desc, out _sessionHandle),
-                nameof(AttachVulkanSurface));
+                MlnMethods.EglSurfaceAttach(Handle, &desc, out _sessionHandle),
+                nameof(AttachEglSurface));
+        }
+    }
+
+    /// <summary>
+    /// Attaches a WGL render session (Windows OpenGL). Requires an OpenGL build.
+    /// HDC and HGLRC are borrowed and must remain valid until the session is destroyed.
+    /// </summary>
+    public void AttachWglSurface(
+        IntPtr hdc, IntPtr hglrc,
+        uint width, uint height, double scaleFactor)
+    {
+        unsafe
+        {
+            var desc = MlnMethods.WglSurfaceDescriptorDefault();
+            desc.Hdc         = hdc;
+            desc.Hglrc       = hglrc;
+            desc.Width       = width;
+            desc.Height      = height;
+            desc.ScaleFactor = scaleFactor;
+            MlnMethods.ThrowIfFailed(
+                MlnMethods.WglSurfaceAttach(Handle, &desc, out _sessionHandle),
+                nameof(AttachWglSurface));
         }
     }
 

@@ -82,7 +82,7 @@ public sealed class MlnRuntime : IDisposable
 
     private unsafe void DispatchEvent(in MlnRuntimeEvent ev)
     {
-        switch ((MlnRuntimeEventType)ev.EventType)
+        switch ((MlnRuntimeEventType)ev.Type)
         {
             case MlnRuntimeEventType.MapRenderUpdateAvailable:
                 RenderUpdateAvailable?.Invoke();
@@ -97,13 +97,28 @@ public sealed class MlnRuntime : IDisposable
                 break;
 
             case MlnRuntimeEventType.MapLoadingFailed:
-                // TODO: read borrowed string from event payload
-                LoadingFailed?.Invoke("map loading failed");
+                // Read the borrowed message from the event envelope
+                var msg = ev.Message != IntPtr.Zero
+                    ? Marshal.PtrToStringUTF8(ev.Message, (int)ev.MessageSize)
+                    : "map loading failed";
+                LoadingFailed?.Invoke(msg ?? "map loading failed");
                 break;
 
             case MlnRuntimeEventType.MapStyleImageMissing:
-                // TODO: read borrowed image_id from event payload
-                StyleImageMissing?.Invoke(string.Empty);
+                // Read the borrowed image ID from the typed payload
+                if (ev.Payload != IntPtr.Zero
+                    && ev.PayloadSize >= Marshal.SizeOf<MlnRuntimeEventStyleImageMissing>())
+                {
+                    var p = Marshal.PtrToStructure<MlnRuntimeEventStyleImageMissing>(ev.Payload);
+                    var imageId = p.ImageId != IntPtr.Zero
+                        ? Marshal.PtrToStringUTF8(p.ImageId, (int)p.ImageIdSize)
+                        : string.Empty;
+                    StyleImageMissing?.Invoke(imageId ?? string.Empty);
+                }
+                else
+                {
+                    StyleImageMissing?.Invoke(string.Empty);
+                }
                 break;
 
             // Ignore event types not yet wired up.

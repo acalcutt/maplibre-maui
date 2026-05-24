@@ -43,6 +43,15 @@ public enum MlnLogLevel : int
     Error   = 3,
 }
 
+/// <summary>Bit-mask of supported render backends. Corresponds to mln_render_backend_flag.</summary>
+[Flags]
+public enum MlnRenderBackendFlag : uint
+{
+    Metal  = 1u << 0,
+    Vulkan = 1u << 1,
+    OpenGL = 1u << 2,
+}
+
 [Flags]
 public enum MlnMapDebugOption : uint
 {
@@ -215,12 +224,11 @@ public struct MlnRuntimeOptions
 [StructLayout(LayoutKind.Sequential)]
 public struct MlnMapOptions
 {
-    public uint Size;
-    public uint Fields;
-    public uint Mode;            // MlnMapMode
-    public uint NorthOrientation; // MlnNorthOrientation
-    public uint ConstrainMode;
-    public uint ViewportMode;
+    public uint   Size;
+    public uint   Width;
+    public uint   Height;
+    public double ScaleFactor;
+    public uint   MapMode;      // MlnMapMode
 }
 
 /// <summary>Minimal runtime event envelope (source_type + event_type + map handle).</summary>
@@ -228,11 +236,92 @@ public struct MlnMapOptions
 public struct MlnRuntimeEvent
 {
     public uint   Size;
-    public uint   SourceType;     // MlnRuntimeEventSourceType
-    public uint   EventType;      // MlnRuntimeEventType
-    public uint   PayloadType;    // MlnRuntimeEventPayloadType
-    public IntPtr MapHandle;      // mln_map* — which map fired the event
-    // payload union follows — access via specific poll overloads or unsafe cast
+    public uint   Type;           // mln_runtime_event_type
+    public uint   SourceType;     // mln_runtime_event_source_type
+    // 4 bytes natural padding (pointer alignment)
+    public IntPtr Source;         // mln_map* or mln_runtime* — which object fired the event
+    public int    Code;
+    public uint   PayloadType;    // mln_runtime_event_payload_type
+    public IntPtr Payload;        // borrowed typed payload (null when payload_size == 0)
+    public nint   PayloadSize;    // size_t
+    public IntPtr Message;        // const char* borrowed UTF-8 message (null when message_size == 0)
+    public nint   MessageSize;    // size_t
+}
+
+// ── Runtime event payload structs ──────────────────────────────────────────
+
+/// <summary>Per-frame render statistics. Corresponds to mln_rendering_stats.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct MlnRenderingStats
+{
+    public uint   Size;
+    public double EncodingTime;    // CPU encoding time in seconds
+    public double RenderingTime;   // CPU rendering time in seconds
+    public long   FrameCount;
+    public long   DrawCallCount;
+    public long   TotalDrawCallCount;
+}
+
+/// <summary>
+/// Payload for <see cref="MlnRuntimeEventType.MapRenderFrameFinished"/>.
+/// Corresponds to mln_runtime_event_render_frame.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct MlnRuntimeEventRenderFrame
+{
+    public uint            Size;
+    public uint            Mode;              // MlnRenderMode
+    [MarshalAs(UnmanagedType.U1)] public bool NeedsRepaint;
+    [MarshalAs(UnmanagedType.U1)] public bool PlacementChanged;
+    public MlnRenderingStats Stats;
+}
+
+/// <summary>
+/// Payload for <see cref="MlnRuntimeEventType.MapStyleImageMissing"/>.
+/// Corresponds to mln_runtime_event_style_image_missing.
+/// image_id bytes are borrowed until the next poll.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct MlnRuntimeEventStyleImageMissing
+{
+    public uint   Size;
+    public IntPtr ImageId;      // const char* borrowed
+    public nint   ImageIdSize;  // size_t
+}
+
+// ── Render target shared types ─────────────────────────────────────────────
+
+/// <summary>Logical render target extent. Corresponds to mln_render_target_extent.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct MlnRenderTargetExtent
+{
+    public uint   Size;
+    public uint   Width;
+    public uint   Height;
+    public double ScaleFactor;
+}
+
+/// <summary>Metal backend context fields. Corresponds to mln_metal_context_descriptor.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct MlnMetalContextDescriptor
+{
+    public uint   Size;
+    // 4 bytes natural padding (aligned to pointer size)
+    public IntPtr Device;   // id<MTLDevice> / MTL::Device*, optional
+}
+
+/// <summary>Vulkan backend context fields. Corresponds to mln_vulkan_context_descriptor.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct MlnVulkanContextDescriptor
+{
+    public uint   Size;
+    // 4 bytes natural padding
+    public IntPtr Instance;
+    public IntPtr PhysicalDevice;
+    public IntPtr Device;
+    public IntPtr GraphicsQueue;
+    public uint   GraphicsQueueFamilyIndex;
+    // 4 bytes natural trailing padding
 }
 
 // ── Metal surface descriptor (iOS / macCatalyst) ───────────────────────────
@@ -241,12 +330,10 @@ public struct MlnRuntimeEvent
 [StructLayout(LayoutKind.Sequential)]
 public struct MlnMetalSurfaceDescriptor
 {
-    public uint   Size;
-    public uint   Width;
-    public uint   Height;
-    public double ScaleFactor;
-    public IntPtr Layer;          // CAMetalLayer*
-    public IntPtr Device;         // id<MTLDevice>, optional
+    public uint                     Size;
+    public MlnRenderTargetExtent    Extent;
+    public MlnMetalContextDescriptor Context;
+    public IntPtr                   Layer;   // CAMetalLayer*
 }
 
 // ── Vulkan surface descriptor (Android / Windows) ─────────────────────────
@@ -255,16 +342,45 @@ public struct MlnMetalSurfaceDescriptor
 [StructLayout(LayoutKind.Sequential)]
 public struct MlnVulkanSurfaceDescriptor
 {
+    public uint                       Size;
+    public MlnRenderTargetExtent      Extent;
+    public MlnVulkanContextDescriptor Context;
+    public IntPtr                     Surface;   // VkSurfaceKHR
+}
+
+// ── EGL surface descriptor (Android / Linux) ──────────────────────────────
+
+/// <summary>
+/// EGL native surface session options (Android). Corresponds to mln_egl_surface_descriptor.
+/// All handles are borrowed and must remain valid until the session is destroyed.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct MlnEglSurfaceDescriptor
+{
     public uint   Size;
     public uint   Width;
     public uint   Height;
     public double ScaleFactor;
-    public IntPtr Instance;
-    public IntPtr PhysicalDevice;
-    public IntPtr Device;
-    public IntPtr GraphicsQueue;
-    public uint   GraphicsQueueFamilyIndex;
-    public IntPtr Surface;           // VkSurfaceKHR
+    public IntPtr Display;   // EGLDisplay
+    public IntPtr Context;   // EGLContext
+    public IntPtr Surface;   // EGLSurface (window surface)
+}
+
+// ── WGL surface descriptor (Windows) ─────────────────────────────────────
+
+/// <summary>
+/// WGL native surface session options (Windows). Corresponds to mln_wgl_surface_descriptor.
+/// HDC and HGLRC are borrowed and must remain valid until the session is destroyed.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct MlnWglSurfaceDescriptor
+{
+    public uint   Size;
+    public uint   Width;
+    public uint   Height;
+    public double ScaleFactor;
+    public IntPtr Hdc;    // HDC
+    public IntPtr Hglrc;  // HGLRC
 }
 
 // ── P/Invoke declarations ─────────────────────────────────────────────────────
@@ -282,6 +398,17 @@ public static partial class MlnMethods
 #endif
 
     // ── Diagnostics ───────────────────────────────────────────────────────────
+    /// <summary>Returns the C ABI contract version number.</summary>
+    [LibraryImport(Lib, EntryPoint = "mln_c_version")]
+    public static partial uint CVersion();
+
+    /// <summary>
+    /// Returns a bit-mask of render backends compiled into this binary
+    /// (see <see cref="MlnRenderBackendFlag"/>).
+    /// </summary>
+    [LibraryImport(Lib, EntryPoint = "mln_supported_render_backend_mask")]
+    public static partial uint SupportedRenderBackendMask();
+
     [LibraryImport(Lib, EntryPoint = "mln_thread_last_error_message")]
     [return: MarshalAs(UnmanagedType.LPUTF8Str)]
     public static partial string ThreadLastErrorMessage();
@@ -375,8 +502,9 @@ public static partial class MlnMethods
     [LibraryImport(Lib, EntryPoint = "mln_metal_surface_descriptor_default")]
     public static partial MlnMetalSurfaceDescriptor MetalSurfaceDescriptorDefault();
 
-    [LibraryImport(Lib, EntryPoint = "mln_map_attach_metal_surface_session")]
-    public static unsafe partial MlnStatus MapAttachMetalSurfaceSession(
+    /// <summary>Attaches a Metal render session (iOS / macCatalyst).</summary>
+    [LibraryImport(Lib, EntryPoint = "mln_metal_surface_attach")]
+    public static unsafe partial MlnStatus MetalSurfaceAttach(
         IntPtr map, MlnMetalSurfaceDescriptor* descriptor, out IntPtr outSession);
 
     [LibraryImport(Lib, EntryPoint = "mln_render_session_resize")]
@@ -396,8 +524,34 @@ public static partial class MlnMethods
     [LibraryImport(Lib, EntryPoint = "mln_vulkan_surface_descriptor_default")]
     public static partial MlnVulkanSurfaceDescriptor VulkanSurfaceDescriptorDefault();
 
-    [LibraryImport(Lib, EntryPoint = "mln_map_attach_vulkan_surface_session")]
-    public static unsafe partial MlnStatus MapAttachVulkanSurfaceSession(
+    /// <summary>Attaches a Vulkan render session (Android / Windows Vulkan).</summary>
+    [LibraryImport(Lib, EntryPoint = "mln_vulkan_surface_attach")]
+    public static unsafe partial MlnStatus VulkanSurfaceAttach(
+        IntPtr map, MlnVulkanSurfaceDescriptor* descriptor, out IntPtr outSession);
+
+    // ── Render session (EGL — Android / Linux) ────────────────────────────
+    [LibraryImport(Lib, EntryPoint = "mln_egl_surface_descriptor_default")]
+    public static partial MlnEglSurfaceDescriptor EglSurfaceDescriptorDefault();
+
+    /// <summary>
+    /// Attaches an EGL render session (Android / Linux). Requires an OpenGL build
+    /// (MLN_FFI_RENDER_BACKEND=opengl). Returns <see cref="MlnStatus.Unsupported"/> otherwise.
+    /// </summary>
+    [LibraryImport(Lib, EntryPoint = "mln_egl_surface_attach")]
+    public static unsafe partial MlnStatus EglSurfaceAttach(
+        IntPtr map, MlnEglSurfaceDescriptor* descriptor, out IntPtr outSession);
+
+    // ── Render session (WGL — Windows OpenGL) ─────────────────────────────
+    [LibraryImport(Lib, EntryPoint = "mln_wgl_surface_descriptor_default")]
+    public static partial MlnWglSurfaceDescriptor WglSurfaceDescriptorDefault();
+
+    /// <summary>
+    /// Attaches a WGL render session (Windows OpenGL). Requires an OpenGL build
+    /// (MLN_FFI_RENDER_BACKEND=opengl). Returns <see cref="MlnStatus.Unsupported"/> otherwise.
+    /// </summary>
+    [LibraryImport(Lib, EntryPoint = "mln_wgl_surface_attach")]
+    public static unsafe partial MlnStatus WglSurfaceAttach(
+        IntPtr map, MlnWglSurfaceDescriptor* descriptor, out IntPtr outSession);
         IntPtr map, MlnVulkanSurfaceDescriptor* descriptor, out IntPtr outSession);
 
     // ── GeoJSON sources ───────────────────────────────────────────────────────

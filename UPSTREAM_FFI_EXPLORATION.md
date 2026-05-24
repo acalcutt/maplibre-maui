@@ -46,22 +46,24 @@ mbgl_map_t* map     = mbgl_map_create(fe, rl, cache, asset, dpr, observer, ud);
 // fe ownership transfers into map
 ```
 
-**Upstream (`mln`)**
+**Upstream (`mln`) — entry points updated in 2025 revision:**
 ```c
 mln_runtime_options opts = mln_runtime_options_default();
 mln_runtime* rt = NULL;
 mln_runtime_create(&opts, &rt);
 
 mln_map_options mopts = mln_map_options_default();
+// mopts now takes initial width/height/scale_factor, not a fields mask
+mopts.width = w; mopts.height = h; mopts.scale_factor = dpr;
 mln_map* map = NULL;
 mln_map_create(rt, &mopts, &map);
 
-// Attach render target (Metal example):
-mln_metal_surface_descriptor desc = mln_metal_surface_descriptor_default();
-desc.layer  = caMetalLayer;
-desc.width  = w; desc.height = h; desc.scale_factor = dpr;
+// Attach render target — WGL example (Windows OpenGL):
+mln_wgl_surface_descriptor desc = mln_wgl_surface_descriptor_default();
+desc.hdc = hdc; desc.hglrc = hglrc;
+desc.width = w; desc.height = h; desc.scale_factor = dpr;
 mln_render_session* session = NULL;
-mln_map_attach_metal_surface_session(map, &desc, &session);
+mln_wgl_surface_attach(map, &desc, &session);  // was mln_map_attach_metal_surface_session
 ```
 
 ### Event / callback model
@@ -83,14 +85,17 @@ while (mln_runtime_poll_event(rt, out var ev) == MlnStatus.Ok)
 | Platform | mbgl-cabi (current) | mln (upstream) |
 |---|---|---|
 | iOS / macCatalyst | Metal (MTKView) | Metal ✓ |
-| Android | OpenGL ES / EGL | **Vulkan only** (no EGL today) |
-| Windows | OpenGL / WGL | **Vulkan only** (no WGL today) |
+| Android | OpenGL ES / EGL | EGL ✓ (`mln_egl_surface_attach` — added) |
+| Windows | OpenGL / WGL | WGL ✓ (`mln_wgl_surface_attach` — added) |
 
-> **Critical gap**: `maplibre-native-ffi` currently has no OpenGL backend —
-> only Metal and Vulkan. Android and Windows support in this project depends on
-> EGL/WGL OpenGL, so those platforms would need Vulkan support added on the
-> native side, or we wait for the upstream to add OpenGL texture/surface
-> descriptors.
+> **Update (2025)**: The critical gap noted in the original exploration — that
+> `maplibre-native-ffi` had no OpenGL backend — is **now resolved**.
+> `surface.h` now declares `mln_egl_surface_attach` (Android/Linux) and
+> `mln_wgl_surface_attach` (Windows), both guarded by
+> `#ifdef MLN_RENDER_BACKEND_OPENGL`. A binary built with
+> `MLN_FFI_RENDER_BACKEND=opengl` supports all four platforms. The primary
+> remaining difference from `mbgl-cabi` is the session ownership model
+> (see below) and the polled vs. push-callback event model.
 
 ---
 
@@ -132,6 +137,62 @@ The P/Invoke `DllImport` name changes from `"mbgl-cabi"` to `"maplibre_native_c"
 
 ---
 
+## Upstream API Changes (2025 Review)
+
+This section documents breaking changes and new capabilities found during a
+second review of the upstream headers.
+
+### Breaking struct changes
+
+| Struct | Before | After |
+|---|---|---|
+| `mln_map_options` | `{size, fields, mode, north_orientation, constrain_mode, viewport_mode}` | `{size, width, height, scale_factor, map_mode}` — viewport options moved to `mln_map_set_viewport_options()` |
+| `mln_metal_surface_descriptor` | flat `{size, width, height, scale_factor, layer, device}` | nested `{size, extent{size,w,h,dpr}, context{size,device}, layer}` |
+| `mln_vulkan_surface_descriptor` | flat with top-level `width/height/scale_factor` | nested `{size, extent{...}, context{size,instance,phys,dev,queue,qfi}, surface}` |
+| `mln_runtime_event` | `{size, source_type, event_type, payload_type, map_handle}` | `{size, type, source_type, source(void*), code(int32_t), payload_type, payload(const void*), payload_size, message(const char*), message_size}` |
+
+### Surface attach entry point renames
+
+| Old entry point | New entry point |
+|---|---|
+| `mln_map_attach_metal_surface_session` | `mln_metal_surface_attach` |
+| `mln_map_attach_vulkan_surface_session` | `mln_vulkan_surface_attach` |
+| _(did not exist)_ | `mln_egl_surface_attach` |
+| _(did not exist)_ | `mln_wgl_surface_attach` |
+
+### New capabilities
+
+- **`mln_render_backend_flag` / `mln_supported_render_backend_mask()`** — query
+  which backends (`Metal | Vulkan | OpenGL`) the current binary supports.
+- **`mln_c_version()`** — ABI contract version (use to assert compatibility).
+- **`mln_map_get/set_viewport_options()`** — viewport options (north orientation,
+  constrain mode, frustum offset) now live in a separate field-mask struct.
+- **`mln_map_get/set_tile_options()`** — tile prefetch / LOD tuning now a
+  separate field-mask struct.
+- **`mln_map_is_fully_loaded()`, `mln_map_dump_debug_logs()`** — new utilities.
+- **`mln_map_set_rendering_stats_view_enabled()`** — toggle stats overlay.
+- **New event payloads**: `mln_runtime_event_render_frame` (includes rendering
+  stats, needs_repaint, placement_changed), `mln_runtime_event_tile_action`
+  (full tile lifecycle), `mln_runtime_event_style_image_missing`.
+- **`mln_style_id_list`** — owned handle for listing source/layer IDs (cleaner
+  than our current newline-delimited string approach).
+- **Custom geometry source** (`mln_map_add_custom_geometry_source`) — C#-side
+  callbacks provide tile data on demand.
+- **Resource provider** (`mln_runtime_set_resource_provider`) — custom HTTP
+  interceptor.
+- **`mln_map_add_geojson_source_data`** now takes a typed `mln_geojson*` struct
+  instead of a raw JSON string.
+
+### Changes applied to `NativeMethods.Mln.cs` / `MlnMap.cs` / `MlnRuntime.cs`
+
+All breaking struct changes listed above have been applied. The sketch files now
+reflect the current upstream ABI. `GeoJSON` P/Invokes that passed a plain string
+to `mln_map_add/set_geojson_source_data` remain as string-passing stubs since
+`mln_geojson` is a complex typed union — they will need proper marshalling when
+that path is exercised.
+
+---
+
 ## Suggested Integration Strategy
 
 ### Phase 1 — iOS/macCatalyst only (Metal, fully supported upstream)
@@ -147,13 +208,19 @@ The P/Invoke `DllImport` name changes from `"mbgl-cabi"` to `"maplibre_native_c"
 5. Keep the old `mbgl-cabi` code paths behind `#if !USE_MLN_FFI` until Android
    and Windows are ready.
 
-### Phase 2 — Android and Windows (Vulkan path)
+### Phase 2 — Android (EGL) and Windows (WGL)
 
-- Android: `maplibre-native-ffi` requires Vulkan. Most modern Android devices
-  support Vulkan 1.1+. The surface descriptor needs a `VkSurfaceKHR` created
-  from an `ANativeWindow` via `vkCreateAndroidSurfaceKHR`.
-- Windows: Vulkan via `vkCreateWin32SurfaceKHR`. The MAUI handler's
-  `HwndSource` (or `SwapChainPanel`) provides the `HWND`.
+Both EGL and WGL surface attach functions now exist in upstream. Enabling them
+requires building `maplibre-native-ffi` with `MLN_FFI_RENDER_BACKEND=opengl`.
+
+- **Android**: Call `mln_egl_surface_attach` with the `EGLDisplay`, `EGLContext`,
+  and `EGLSurface` obtained from the Android `GLSurfaceView` / `SurfaceTexture`.
+- **Windows**: Call `mln_wgl_surface_attach` with the `HDC` and `HGLRC` that
+  our `MbglMapHost` (WPF) or the MAUI Windows controller already sets up. The
+  WGL context creation code in `MbglFrontend.cs` / `MbglMapHost.cs` can be reused
+  as-is — only the `mln_wgl_surface_attach` call replaces the old `mbgl_frontend`.
+
+Note: both use `MLN_STATUS_UNSUPPORTED` when the binary is not an OpenGL build.
 
 ### Phase 3 — Remove mbgl-cabi
 

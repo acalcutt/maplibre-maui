@@ -612,8 +612,10 @@ public class MapLibreMapController : IMapLibreMapController
         {
             case "onDidFinishLoadingStyle":
                 _styleReady = true;
+                _locIndLayer = null;  // style reload invalidates all layer handles
                 _style = _map?.GetStyle();
                 _renderNeedsUpdate = true;
+                if (_pendingLocInd.HasValue) ApplyPendingLocationIndicator();
                 RefreshAttributionText();  // rebuild attribution from TileJSON sources
                 OnStyleLoadedReceived?.Invoke(new Maps.Style(null));
                 break;
@@ -1615,6 +1617,63 @@ public class MapLibreMapController : IMapLibreMapController
 
     public void SetLayerVisibility(string layerId, bool visible)
         => _style?.GetLayer(layerId)?.SetVisible(visible);
+
+    // ── Location indicator ("blue dot") ──────────────────────────────────────
+
+    public bool FollowLocation { get; set; } = true;
+    public bool ShowBearing    { get; set; } = true;
+
+    private const string LocIndLayerId = "mbgl_maui_location";
+    private MbglLayer?   _locIndLayer;
+    private record struct LocIndParams(double Lat, double Lon, float Bearing, float AccuracyM);
+    private LocIndParams? _pendingLocInd;
+
+    public void UpdateLocationIndicator(double lat, double lon, float bearing = 0, float accuracyMeters = 10)
+    {
+        bool isFirstFix = !_pendingLocInd.HasValue;
+        _pendingLocInd = new LocIndParams(lat, lon, bearing, Math.Max(5f, accuracyMeters));
+
+        if (FollowLocation)
+        {
+            if (isFirstFix) JumpTo(lat, lon, GetZoom() < 8 ? 14 : GetZoom());
+            else            EaseTo(lat, lon, GetZoom(), GetBearing(), GetPitch(), durationMs: 200);
+        }
+
+        if (!_styleReady || _style == null) return;
+        ApplyPendingLocationIndicator();
+    }
+
+    public void ClearLocationIndicator()
+    {
+        _pendingLocInd = null;
+        _locIndLayer   = null;
+        if (_styleReady && _style?.HasLayer(LocIndLayerId) == true)
+            _style.RemoveLayer(LocIndLayerId);
+        _renderNeedsUpdate = true;
+    }
+
+    private void ApplyPendingLocationIndicator()
+    {
+        if (_pendingLocInd == null || _style == null) return;
+        var p  = _pendingLocInd.Value;
+        var ic = System.Globalization.CultureInfo.InvariantCulture;
+
+        if (_locIndLayer == null)
+        {
+            if (_style.HasLayer(LocIndLayerId)) _style.RemoveLayer(LocIndLayerId);
+            _locIndLayer = _style.AddLocationIndicatorLayer(LocIndLayerId);
+            _locIndLayer.SetPaintProperty("accuracy-radius-color", "\"rgba(30,136,229,0.3)\"");
+            _locIndLayer.SetPaintProperty("accuracy-radius-border-color", "\"rgba(30,136,229,0.85)\"");
+        }
+
+        _locIndLayer.SetPaintProperty("location",
+            $"[{p.Lat.ToString(ic)},{p.Lon.ToString(ic)},0]");
+        _locIndLayer.SetPaintProperty("bearing",
+            (ShowBearing ? p.Bearing : 0f).ToString(ic));
+        _locIndLayer.SetPaintProperty("accuracy-radius", p.AccuracyM.ToString(ic));
+
+        _renderNeedsUpdate = true;
+    }
 
     public void OnPointerWheelChanged(double delta, double cx, double cy)
         => _map?.OnScroll(delta, cx, cy);

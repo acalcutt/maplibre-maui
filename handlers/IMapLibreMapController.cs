@@ -212,4 +212,17 @@ public interface IMapLibreMapController : IMapLibreMapOptionsSink
     bool GetLayerVisibility(string layerId);
     /// <summary>Show or hide an existing layer.</summary>
     void SetLayerVisibility(string layerId, bool visible);
+
+    // ── Location indicator ("blue dot") ──────────────────────────────────────
+    /// <summary>When true, each GPS fix also re-centres the map.</summary>
+    bool FollowLocation { get; set; }
+    /// <summary>When false the bearing arrow is suppressed — indicator always points north.</summary>
+    bool ShowBearing { get; set; }
+    /// <summary>
+    /// Show (or update) the user-location indicator at the given position.
+    /// Safe to call before the style is fully loaded; the position is queued and applied on StyleLoaded.
+    /// </summary>
+    void UpdateLocationIndicator(double lat, double lon, float bearing = 0, float accuracyMeters = 10);
+    /// <summary>Remove the location indicator layer and reset state.</summary>
+    void ClearLocationIndicator();
 }
