@@ -11,6 +11,7 @@
  * Output: map_output.png written to the executable directory.
  */
 using Maui.MapLibre.Native;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
