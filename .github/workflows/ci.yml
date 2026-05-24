@@ -51,7 +51,7 @@ jobs:
   # ── NuGet pack (verify packability, no publish) ───────────────────────────
   pack:
     name: Pack NuGet
-    runs-on: macos-15
+    runs-on: macos-latest
     needs: [version, build-windows, build-android, build-apple]
 
     steps:
@@ -194,7 +194,7 @@ jobs:
   # ── Sample app builds (validate end-to-end compilation) ───────────────────
   sample:
     name: Sample — all platforms
-    runs-on: macos-15
+    runs-on: macos-latest
     needs: [version, pack]
 
     steps:
