@@ -226,7 +226,13 @@ jobs:
         run: dotnet nuget add source $(pwd)/local-feed --name local-ci
 
       - name: Restore workloads
-        run: dotnet workload restore sample/MauiSample.csproj
+        # --skip-manifest-update keeps the runner's pre-installed manifests;
+        # dotnet workload restore without this flag would fetch the latest manifests
+        # which now include Microsoft.iOS.Sdk 26.5.x requiring Xcode 26.5, but
+        # macos-latest still ships Xcode 16.4.  iOS/macCatalyst sample builds are
+        # skipped below for the same reason — the pack job already compiles those TFMs
+        # and native-apple.yml validates the native layer.
+        run: dotnet workload install maui --skip-manifest-update
 
       - name: Build sample (Android)
         run: |
@@ -236,22 +242,10 @@ jobs:
             -p:EnableWindowsTargeting=true \
             -p:UseLocalPackages=true
 
-      - name: Build sample (iOS)
-        run: |
-          dotnet build sample/MauiSample.csproj \
-            -f net9.0-ios \
-            -c Release \
-            -p:EnableWindowsTargeting=true \
-            -p:RuntimeIdentifier=ios-arm64 \
-            -p:UseLocalPackages=true
-
-      - name: Build sample (macCatalyst)
-        run: |
-          dotnet build sample/MauiSample.csproj \
-            -f net9.0-maccatalyst \
-            -c Release \
-            -p:EnableWindowsTargeting=true \
-            -p:UseLocalPackages=true
+      # iOS/macCatalyst builds require Xcode 26.5 (Microsoft.iOS.Sdk 26.5.x) which
+      # is not available on macos-latest (Xcode 16.4).  They are validated by the
+      # pack job (TFM restore) and native-apple.yml (native library compilation).
+      # Re-enable once GitHub Actions ships a macOS image with Xcode 26.5.
 
       - name: Build sample (Windows)
         run: |
