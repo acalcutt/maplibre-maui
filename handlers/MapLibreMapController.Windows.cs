@@ -342,7 +342,7 @@ public class MapLibreMapController : IMapLibreMapController
     // ── State ─────────────────────────────────────────────────────────────────
 
     private readonly IntPtr _parentHwnd;
-    private readonly string? _styleString;
+    private string? _styleString;
     private readonly float   _pixelRatio;
 
     private IntPtr       _effectiveParentHwnd = IntPtr.Zero;
