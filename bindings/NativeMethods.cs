@@ -52,6 +52,40 @@ public static partial class NativeMethods
     private const string Lib = "mln-cabi";
 #else
     private const string Lib = "mln-cabi";
+
+    // On Windows the NuGet package places mln-cabi.dll in native\win-x64\ (or
+    // win-arm64\) relative to the app directory — the standard RID-specific layout.
+    // P/Invoke does not probe subdirectories by default, so we register a resolver
+    // that tries that path before falling back to the OS search order.
+    static NativeMethods()
+    {
+        System.Runtime.InteropServices.NativeLibrary.SetDllImportResolver(
+            typeof(NativeMethods).Assembly,
+            (libraryName, assembly, searchPath) =>
+            {
+                if (libraryName != "mln-cabi")
+                    return IntPtr.Zero;
+
+                string rid = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture switch
+                {
+                    System.Runtime.InteropServices.Architecture.X64   => "win-x64",
+                    System.Runtime.InteropServices.Architecture.Arm64 => "win-arm64",
+                    _ => string.Empty
+                };
+
+                if (rid.Length > 0)
+                {
+                    string probe = System.IO.Path.Combine(
+                        AppContext.BaseDirectory, "native", rid, "mln-cabi.dll");
+                    if (System.IO.File.Exists(probe) &&
+                        System.Runtime.InteropServices.NativeLibrary.TryLoad(probe, out IntPtr h))
+                        return h;
+                }
+
+                // Fall through to default OS search (app dir, PATH, etc.)
+                return IntPtr.Zero;
+            });
+    }
 #endif
 
     // ── Callbacks ─────────────────────────────────────────────────────────────
