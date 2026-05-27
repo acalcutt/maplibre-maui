@@ -29,8 +29,10 @@ The `mln-cabi` native library is compiled per-platform:
 | Platform | Renderer | CI |
 |---|---|---|
 | Android | OpenGL ES (EGL + ANativeWindow) | `native-android.yml` |
+| Android | Vulkan | `native-android-vulkan.yml` |
 | iOS / macCatalyst | Metal (MTKView) | `native-apple.yml` |
 | Windows | OpenGL (WGL) | `native-windows.yml` |
+| Windows | Vulkan | `native-windows-vulkan.yml` |
 
 MapLibre Native is included as a **git submodule** at `dependencies/maplibre-native`.
 
@@ -148,6 +150,8 @@ Declare layers as child elements of `MapLibreMap`. Each layer references a `Sour
 | `RasterLayer` | `raster` |
 | `HeatmapLayer` | `heatmap` |
 | `FillExtrusionLayer` | `fill-extrusion` |
+| `HillshadeLayer` | `hillshade` |
+| `ColorReliefLayer` | `color-relief` |
 
 ```xaml
 <layers:FillLayer SourceName="polygons"
