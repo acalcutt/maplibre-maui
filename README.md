@@ -252,6 +252,25 @@ The `MbglDebugOptions` enum in `Maui.MapLibre.Native` names the individual bits 
 
 ---
 
+## WPF Usage
+
+For WPF apps (not MAUI), use `MlnMapHost` from `Maui.MapLibre.WPF`:
+
+```xaml
+xmlns:mlwpf="clr-namespace:Maui.MapLibre.WPF;assembly=Maui.MapLibre.WPF"
+
+<mlwpf:MlnMapHost x:Name="MapHost"
+                  StyleUrl="https://demotiles.maplibre.org/style.json"
+                  ShowNavigationControls="True"
+                  MapReady="MapHost_MapReady"
+                  StyleLoaded="MapHost_StyleLoaded"
+                  CameraIdle="MapHost_CameraIdle" />
+```
+
+`MlnMapHost` is a `HwndHost` that owns a child HWND rendered with OpenGL (WGL). It supports the same camera, source, layer, and query operations as the MAUI handler. See `sample/WpfExample` for a full working example.
+
+---
+
 ## Building from Source
 
 ### Prerequisites
@@ -299,5 +318,5 @@ This project is **BSD 2-Clause** licensed — see [LICENSE](/LICENSE).
 | Dependency | License | Notes |
 |---|---|---|
 | [MapLibre Native](https://github.com/maplibre/maplibre-native) | BSD 2-Clause | Linked natively via `mln-cabi` |
-| [maplibre-native-ffi](https://github.com/maplibre/maplibre-native-ffi) | BSD 2-Clause | C ABI design (typed handles, status codes, log callback) |
+| [maplibre-native-ffi](https://github.com/maplibre/maplibre-native-ffi) | BSD 2-Clause | Reference only — no code included; project structure and C ABI conventions (typed handles, status codes, log callback) informed the design of `mln-cabi` |
 | Original [maplibre-maui](https://github.com/btrounson/maplibre-maui) by Benjamin Trounson | MIT | Portions adapted |

@@ -12,6 +12,21 @@
 - **`noexcept` guarantees** — All C ABI entry points are marked `noexcept`; exceptions are caught internally and surfaced via `mbgl_get_last_error()`
 - Sample app: debug overlay toggle switch (TileBorders + Collision) demonstrates `SetDebugOptions` at runtime
 
+## 2.0.0
+### ✨ Features and improvements
+- **Prefix rename: `mbgl` → `mln`** — All C ABI filenames, macros, and symbols updated: `mbgl_cabi.h/cpp` → `mln_cabi.h/cpp`, `MBGL_CABI_API/NOEXCEPT/EXPORT` → `MLN_CABI_API/NOEXCEPT/EXPORT`, `mbgl_cabi_version()` → `mln_cabi_version()`
+- **WPF control rename** — `MbglMapHost` → `MlnMapHost` (class and file `wpf/MlnMapHost.cs`)
+- **Sample CI artifacts** — CI now uploads downloadable artifacts for all sample apps:
+  - `windows-samples-ci` — `WpfExample-win-x64` and `WpfExample-win-arm64` zips
+  - `sample-android-apk` — signed Android APK from the MAUI sample
+  - `sample-windows-maui` — self-contained Windows MAUI app (via `dotnet publish`)
+
+### 🐞 Bug fixes
+- **Windows MAUI initial black map** — `SetStyleString` now always stores `_styleString` even when `_map` is not yet initialized, so `TryInitialize` (fired on `View.Loaded`) picks up the style URL set by the MAUI property mapper before the view is ready
+- **WpfExample crash on launch** — `mln-cabi.dll` is placed by NuGet in `native\win-x64\` (RID layout) but P/Invoke could not find it. Added `NativeLibrary.SetDllImportResolver` in `NativeMethods` static constructor to probe `<AppDir>\native\<rid>\mln-cabi.dll` before falling back to the OS search order
+- **CI vcpkg cache abort** — `actions/cache@v4` restore failure on Windows native builds was killing all downstream steps. Added `continue-on-error: true` to the cache step in `native-windows.yml` and `native-windows-vulkan.yml` so a cache miss falls through to a clean vcpkg build
+- **CI NuGet local feed path** — `dotnet nuget add source local-feed` used a relative path that NuGet resolved against the user profile instead of the workspace. Fixed to use `"${{ github.workspace }}\local-feed"` (absolute path)
+
 ## master
 ### ✨ Features and improvements
 - _...Add new stuff here..._
