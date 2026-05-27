@@ -38,9 +38,12 @@ jobs:
             .git/modules/dependencies/maplibre-native-ffi/modules/third_party/maplibre-native
           key: mln-src-v1-${{ hashFiles('dependencies/maplibre-native-ffi/.gitmodules', 'dependencies/maplibre-native-ffi/cmake/mln_version.cmake') }}
 
-      - name: Init maplibre-native submodule inside ffi (shallow)
+      - name: Enable Git long paths
+        run: git config --global core.longpaths true
+
+      - name: Init maplibre-native submodule inside ffi (shallow, recursive)
         working-directory: dependencies/maplibre-native-ffi
-        run: git submodule update --init --depth 1 third_party/maplibre-native
+        run: git submodule update --init --recursive --depth 1 third_party/maplibre-native
 
       - name: Set up CI dependencies (mise + sccache)
         uses: ./dependencies/maplibre-native-ffi/.github/actions/setup-ci-deps
