@@ -41,11 +41,11 @@
 
         <!-- ── Map ── -->
         <!--
-            MbglMapHost is an HwndHost — it owns a child HWND backed by OpenGL.
+            MlnMapHost is an HwndHost — it owns a child HWND backed by OpenGL.
             StyleUrl, ShowNavigationControls and events are set here; everything
             else (pan, zoom, double-tap) is handled internally by the control.
         -->
-        <mlwpf:MbglMapHost x:Name="MapHost"
+        <mlwpf:MlnMapHost x:Name="MapHost"
                            StyleUrl="https://demotiles.maplibre.org/style.json"
                            ShowNavigationControls="True"
                            MapReady="MapHost_MapReady"

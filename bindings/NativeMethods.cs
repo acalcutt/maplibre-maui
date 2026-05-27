@@ -1,5 +1,5 @@
 /**
- * MbglCabi.cs — P/Invoke declarations for mbgl_cabi native library.
+ * NativeMethods.cs — P/Invoke declarations for mln_cabi native library.
  *
  * All handles (RunLoop, Map, Frontend, Style, Source, Layer) are opaque IntPtr.
  * Thread-safety: Map must be used on the same thread as its RunLoop.

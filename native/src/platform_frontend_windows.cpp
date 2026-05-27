@@ -143,7 +143,7 @@ private:
     NullMapObserver                           _nullObserver;
 };
 
-/* ── Factory (called by mbgl_cabi.cpp) ─────────────────────────────── */
+/* ── Factory (called by mln_cabi.cpp) ──────────────────────────────── */
 PlatformFrontend* createPlatformFrontend(
     void* surface_handle, void* gl_context,
     mbgl::Size sz, float pixelRatio,

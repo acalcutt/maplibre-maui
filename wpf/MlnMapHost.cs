@@ -26,7 +26,7 @@ namespace Maui.MapLibre.WPF;
 /// Handles its own OpenGL context, RunLoop, pan/zoom/double-tap input and optional
 /// navigation + attribution overlay popups.
 /// </summary>
-public class MbglMapHost : HwndHost
+public class MlnMapHost : HwndHost
 {
     private static readonly string LogPath =
         System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "mbgl_wpf_log.txt");
@@ -44,12 +44,12 @@ public class MbglMapHost : HwndHost
         set => SetValue(StyleUrlProperty, value);
     }
     public static readonly DependencyProperty StyleUrlProperty =
-        DependencyProperty.Register(nameof(StyleUrl), typeof(string), typeof(MbglMapHost),
+        DependencyProperty.Register(nameof(StyleUrl), typeof(string), typeof(MlnMapHost),
             new PropertyMetadata("https://demotiles.maplibre.org/style.json", OnStyleUrlChanged));
 
     private static void OnStyleUrlChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        if (d is MbglMapHost h && h._map != null && e.NewValue is string url)
+        if (d is MlnMapHost h && h._map != null && e.NewValue is string url)
         {
             if (url.TrimStart().StartsWith('{'))
                 h._map.SetStyleJson(url);
@@ -64,12 +64,12 @@ public class MbglMapHost : HwndHost
         set => SetValue(ShowNavigationControlsProperty, value);
     }
     public static readonly DependencyProperty ShowNavigationControlsProperty =
-        DependencyProperty.Register(nameof(ShowNavigationControls), typeof(bool), typeof(MbglMapHost),
+        DependencyProperty.Register(nameof(ShowNavigationControls), typeof(bool), typeof(MlnMapHost),
             new PropertyMetadata(true, OnShowNavChanged));
 
     private static void OnShowNavChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        if (d is MbglMapHost h) h.UpdateNavPopupOpen();
+        if (d is MlnMapHost h) h.UpdateNavPopupOpen();
     }
 
     // ── Public non-DP properties ──────────────────────────────────────────────

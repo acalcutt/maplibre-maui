@@ -31,7 +31,7 @@ else()
 endif()
 
 target_compile_definitions(mln-cabi PRIVATE
-    MBGL_CABI_EXPORT
+    MLN_CABI_EXPORT
     _USE_MATH_DEFINES
     NOMINMAX
 )
@@ -42,7 +42,7 @@ target_include_directories(mln-cabi PRIVATE
 )
 
 target_sources(mln-cabi PRIVATE
-    src/mbgl_cabi.cpp
+    src/mln_cabi.cpp
 )
 
 # ── Platform-specific frontend ────────────────────────────────────────────────
@@ -64,7 +64,7 @@ elseif(ANDROID)
         src/http_file_source_stub.cpp
     )
     # MapLibre disables RTTI on Android/Linux. We must match that so polymorphic
-    # classes in mbgl_cabi.cpp don't emit typeinfo that references non-existent
+    # classes in mln_cabi.cpp don't emit typeinfo that references non-existent
     # base class typeinfos in mbgl-core.a.
     target_compile_options(mln-cabi PRIVATE
         -fno-rtti
@@ -112,4 +112,4 @@ set_target_properties(mln-cabi PROPERTIES
 )
 
 install(TARGETS mln-cabi DESTINATION lib)
-install(FILES include/mbgl_cabi.h DESTINATION include)
+install(FILES include/mln_cabi.h DESTINATION include)

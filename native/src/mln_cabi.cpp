@@ -1,12 +1,12 @@
 /**
- * mbgl_cabi.cpp — Implementation of the flat C ABI wrapper.
+ * mln_cabi.cpp — Implementation of the flat C ABI wrapper.
  *
  * Compiles as a plain C++ shared library (no C++/CLI, no JNI, no ObjC).
  * The platform-specific frontend (rendering surface binding) is handled by
  * PlatformFrontend, which has per-platform .cpp files included via CMake.
  */
 
-#include "mbgl_cabi.h"
+#include "mln_cabi.h"
 
 #include <mbgl/map/map.hpp>
 #include <mbgl/map/map_options.hpp>
@@ -1233,7 +1233,7 @@ int mbgl_layer_get_visibility(mbgl_layer_t* layer) noexcept {
 }
 
 /* ─── Version ───────────────────────────────────────────────────────────────── */
-const char* mbgl_cabi_version() noexcept {
+const char* mln_cabi_version() noexcept {
     return "2.0.0";
 }
 
