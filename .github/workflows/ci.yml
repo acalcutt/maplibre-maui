@@ -257,6 +257,13 @@ jobs:
             -p:EnableWindowsTargeting=true \
             -p:UseLocalPackages=true
 
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-android-apk
+          path: sample/bin/Release/net9.0-android/*Signed.apk
+          retention-days: 7
+
       # iOS/macCatalyst builds require Xcode 26.5 (Microsoft.iOS.Sdk 26.5.x) which
       # is not available on macos-latest (Xcode 16.4).  They are validated by the
       # pack job (TFM restore) and native-apple.yml (native library compilation).
@@ -290,12 +297,21 @@ jobs:
       - name: Restore workloads
         run: dotnet workload restore sample/MauiSample.csproj
 
-      - name: Build sample (Windows)
+      - name: Publish sample (Windows)
         run: |
-          dotnet build sample/MauiSample.csproj `
+          dotnet publish sample/MauiSample.csproj `
             -f net9.0-windows10.0.19041.0 `
             -c Release `
-            -p:UseLocalPackages=true
+            -p:WindowsPackageType=None `
+            -p:UseLocalPackages=true `
+            -o publish/MauiSample-windows
+
+      - name: Upload Windows MAUI sample
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-windows-maui
+          path: publish/MauiSample-windows/
+          retention-days: 7
 
   # ── Pack Maui.MapLibre.Native.Vulkan NuGet ────────────────────────────────
   pack-vulkan:
