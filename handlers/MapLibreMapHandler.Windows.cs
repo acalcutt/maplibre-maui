@@ -64,13 +64,11 @@ public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Microsoft.UI.
         view.PointerReleased     += OnPointerReleased;
         view.PointerCanceled     += OnPointerCanceled;
         view.DoubleTapped        += OnDoubleTapped;
-        // Scale only — using Scale+TranslateX+Y triggers an arithmetic overflow
-        // inside WinUI 3's manipulation tracker (see microsoft/microsoft-ui-xaml#8084).
-        // Pan is already handled by the popup HWND's WM_LBUTTONDOWN/MOVE WndProc.
-        view.ManipulationMode     = ManipulationModes.Scale;
-        view.ManipulationStarted  += OnManipulationStarted;
-        view.ManipulationDelta    += OnManipulationDelta;
-        view.ManipulationCompleted += OnManipulationCompleted;
+        // Pinch-to-zoom is handled at the Win32 level via WM_GESTURE in the
+        // popup HWND's WndProc.  Do NOT use XAML ManipulationDelta — even
+        // Scale-only mode triggers an arithmetic overflow in WinUI 3's internal
+        // manipulation tracker on precision touchpads
+        // (microsoft/microsoft-ui-xaml#8084).
     }
 
     private void OnPointerWheelChanged(object sender, PointerRoutedEventArgs e)
@@ -129,26 +127,6 @@ public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Microsoft.UI.
         e.Handled = true;
     }
 
-    private void OnManipulationStarted(object sender, ManipulationStartedRoutedEventArgs e)
-    {
-        e.Handled = true;
-    }
-
-    private void OnManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
-    {
-        // e.Delta.Scale is the per-frame incremental ratio (e.g. 1.02 or 0.98).
-        // Pass it directly so the native side applies log2(delta) each frame — a
-        // bounded per-frame delta that cannot diverge toward zero or infinity.
-        var center = e.Position;
-        _controller.OnPinch(e.Delta.Scale, center.X, center.Y);
-        e.Handled = true;
-    }
-
-    private void OnManipulationCompleted(object sender, ManipulationCompletedRoutedEventArgs e)
-    {
-        e.Handled = true;
-    }
-
     // ── PropertyMapper update methods ─────────────────────────────────────────
 
     public void UpdateStyleUrl(string styleUrl)
@@ -194,9 +172,6 @@ public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Microsoft.UI.
         platformView.PointerReleased     -= OnPointerReleased;
         platformView.PointerCanceled     -= OnPointerCanceled;
         platformView.DoubleTapped        -= OnDoubleTapped;
-        platformView.ManipulationStarted  -= OnManipulationStarted;
-        platformView.ManipulationDelta     -= OnManipulationDelta;
-        platformView.ManipulationCompleted -= OnManipulationCompleted;
 
         base.DisconnectHandler(platformView);
     }

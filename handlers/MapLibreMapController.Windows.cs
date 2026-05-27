@@ -242,6 +242,32 @@ public class MapLibreMapController : IMapLibreMapController
     private const uint MK_LBUTTON         = 0x0001;
     private const int  WHEEL_DELTA        = 120;
 
+    // WM_GESTURE constants (pinch-to-zoom via Win32 gesture API)
+    private const uint WM_GESTURE  = 0x0119;
+    private const uint GID_ZOOM    = 3;
+    private const uint GF_BEGIN    = 0x0001;
+    private const uint GF_END      = 0x0004;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GESTUREINFO
+    {
+        public uint  cbSize;
+        public uint  dwFlags;       // GF_BEGIN | GF_END | GF_INERTIA
+        public uint  dwID;          // GID_ZOOM etc.
+        public short ptsLocationX;  // gesture centroid, screen coords
+        public short ptsLocationY;
+        public uint  dwInstanceID;
+        public uint  dwSequenceID;
+        public ulong ullArguments;  // GID_ZOOM: lower 32 bits = pixel distance between points
+        public uint  cbExtraArgs;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetGestureInfo(IntPtr hGestureInfo, ref GESTUREINFO pGestureInfo);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool CloseGestureInfoHandle(IntPtr hGestureInfo);
+
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
     private struct WNDCLASSEXA
     {
@@ -298,6 +324,7 @@ public class MapLibreMapController : IMapLibreMapController
     private bool   _dragging;
     private int    _lastMouseX;
     private int    _lastMouseY;
+    private uint   _gesturePrevDist;  // previous per-frame distance for incremental WM_GESTURE zoom
 
     private static void EnsureGlWindowClassRegistered()
     {
@@ -1433,13 +1460,49 @@ public class MapLibreMapController : IMapLibreMapController
                 // Convert screen cursor pos → popup client coords.
                 int screenX = (short)(lParam.ToInt32() & 0xFFFF);
                 int screenY = (short)((lParam.ToInt32() >> 16) & 0xFFFF);
-                var pt = new POINT { X = screenX, Y = screenY };
-                // ScreenToClient not available here directly; use popup rect offset.
                 GetWindowRect(hWnd, out var wr);
                 int cx = screenX - wr.Left;
                 int cy = screenY - wr.Top;
                 _map?.OnScroll((double)delta / WHEEL_DELTA, cx, cy);
                 _renderNeedsUpdate = true;
+                return IntPtr.Zero;
+            }
+
+            case WM_GESTURE:
+            {
+                // Handle pinch-to-zoom via the Win32 gesture API.  This fires for
+                // both touch screens and precision touchpads without going through
+                // WinUI 3's ManipulationDelta, which overflows on touchpad pinch
+                // (microsoft/microsoft-ui-xaml#8084).
+                var gi = new GESTUREINFO { cbSize = (uint)Marshal.SizeOf<GESTUREINFO>() };
+                if (GetGestureInfo(wParam, ref gi) && gi.dwID == GID_ZOOM)
+                {
+                    // ptsLocation is in screen coords — convert to popup client coords.
+                    GetWindowRect(hWnd, out var gwr);
+                    int gcx = gi.ptsLocationX - gwr.Left;
+                    int gcy = gi.ptsLocationY - gwr.Top;
+
+                    uint dist = (uint)(gi.ullArguments & 0xFFFFFFFFUL);
+
+                    if ((gi.dwFlags & GF_BEGIN) != 0)
+                    {
+                        // Record starting distance; no zoom change on the first frame.
+                        _gesturePrevDist = dist;
+                    }
+                    else if (_gesturePrevDist > 0 && dist > 0)
+                    {
+                        // Incremental per-frame scale — consistent with what the
+                        // native mbgl_map_on_pinch expects (log2 of a small ratio).
+                        double scale = (double)dist / _gesturePrevDist;
+                        _map?.OnPinch(scale, gcx, gcy);
+                        _renderNeedsUpdate = true;
+                        _gesturePrevDist = dist;
+                    }
+
+                    if ((gi.dwFlags & GF_END) != 0)
+                        _gesturePrevDist = 0;
+                }
+                CloseGestureInfoHandle(wParam);
                 return IntPtr.Zero;
             }
         }
