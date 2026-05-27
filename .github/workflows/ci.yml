@@ -304,11 +304,11 @@ jobs:
           mkdir -p $N/android-arm64 $N/android-x64
           mkdir -p $N/ios-arm64 $N/maccatalyst
 
-          find mln-artifacts/native-mln-windows-x64-vulkan -name "maplibre_native_c.dll"  -exec cp {} $N/win-x64/      \; 2>/dev/null || true
-          find mln-artifacts/native-mln-android-arm64-v8a  -name "libmaplibre_native_c.so" -exec cp {} $N/android-arm64/ \; 2>/dev/null || true
-          find mln-artifacts/native-mln-android-x86_64     -name "libmaplibre_native_c.so" -exec cp {} $N/android-x64/  \; 2>/dev/null || true
-          find mln-artifacts/native-mln-ios-arm64          -name "libmaplibre_native_c.a"  -exec cp {} $N/ios-arm64/    \; 2>/dev/null || true
-          find mln-artifacts/native-mln-maccatalyst        -name "libmaplibre_native_c.a"  -exec cp {} $N/maccatalyst/  \; 2>/dev/null || true
+          find mln-artifacts/native-mln-windows-x64-vulkan -name "mbgl-cabi.dll"    -exec cp {} $N/win-x64/      \; 2>/dev/null || true
+          find mln-artifacts/native-mln-android-arm64-v8a  -name "libmbgl-cabi.so"  -exec cp {} $N/android-arm64/ \; 2>/dev/null || true
+          find mln-artifacts/native-mln-android-x86_64     -name "libmbgl-cabi.so"  -exec cp {} $N/android-x64/  \; 2>/dev/null || true
+          find mln-artifacts/native-mln-ios-arm64          -name "libmbgl-cabi.a"   -exec cp {} $N/ios-arm64/    \; 2>/dev/null || true
+          find mln-artifacts/native-mln-maccatalyst        -name "libmbgl-cabi.a"   -exec cp {} $N/maccatalyst/  \; 2>/dev/null || true
 
           echo "Vulkan native libs arranged:"
           find $N -type f

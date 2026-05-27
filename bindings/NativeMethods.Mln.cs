@@ -392,9 +392,9 @@ public static partial class MlnMethods
 #if IOS || MACCATALYST
     private const string Lib = "__Internal";
 #elif ANDROID
-    private const string Lib = "maplibre_native_c";
+    private const string Lib = "mbgl-cabi";
 #else
-    private const string Lib = "maplibre_native_c";
+    private const string Lib = "mbgl-cabi";
 #endif
 
     // ── Diagnostics ───────────────────────────────────────────────────────────

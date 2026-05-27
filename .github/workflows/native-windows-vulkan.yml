@@ -1,6 +1,4 @@
-name: Native Windows Vulkan (maplibre_native_c)
-# Builds maplibre_native_c.dll using the maplibre-native-ffi build system.
-# Only x64 for now — the upstream mise config has no windows-arm64-vulkan variant yet.
+name: Native Windows Vulkan
 
 on:
   workflow_call:
@@ -10,67 +8,66 @@ env:
 
 jobs:
   build:
-    name: Windows Vulkan ${{ matrix.variant }}
-    runs-on: ${{ matrix.runs-on }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - variant: windows-x64-vulkan
-            runs-on: windows-latest
+    name: Windows x64 Vulkan
+    runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          # Only init the ffi submodule here; its nested maplibre-native
-          # submodule is large and is handled separately below with caching.
-          submodules: false
-
-      - name: Init maplibre-native-ffi submodule
-        run: git submodule update --init dependencies/maplibre-native-ffi
-
-      - name: Cache maplibre-native source tree
-        id: cache-mln-src
-        uses: actions/cache@v4
-        with:
-          path: |
-            dependencies/maplibre-native-ffi/third_party/maplibre-native
-            .git/modules/dependencies/maplibre-native-ffi/modules/third_party/maplibre-native
-          key: mln-src-v1-${{ hashFiles('dependencies/maplibre-native-ffi/.gitmodules', 'dependencies/maplibre-native-ffi/cmake/mln_version.cmake') }}
-
       - name: Enable Git long paths
         run: git config --global core.longpaths true
 
-      - name: Init maplibre-native submodule inside ffi (shallow, recursive)
-        working-directory: dependencies/maplibre-native-ffi
-        run: git submodule update --init --recursive --depth 1 third_party/maplibre-native
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Set up CI dependencies (mise + sccache)
-        uses: ./dependencies/maplibre-native-ffi/.github/actions/setup-ci-deps
+      - name: Set up MSVC developer tools
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
 
-      - name: Configure
-        working-directory: dependencies/maplibre-native-ffi
+      - name: Get vcpkg commit ID
+        id: vcpkg-id
+        shell: pwsh
+        run: |
+          $id = git -C dependencies/maplibre-native/platform/windows/vendor/vcpkg rev-parse HEAD
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "commit_id=$id"
+
+      - name: Cache vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: dependencies/maplibre-native/platform/windows/vendor/vcpkg/archives
+          key: vcpkg-x64-windows-vulkan-${{ steps.vcpkg-id.outputs.commit_id }}
+
+      - name: Bootstrap vcpkg
+        run: dependencies\maplibre-native\platform\windows\vendor\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Configure CMake
+        shell: pwsh
         env:
-          MISE_ENV: ${{ matrix.variant }}
-        run: mise run configure
+          VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}\\dependencies\\maplibre-native\\platform\\windows\\vendor\\vcpkg\\archives,readwrite"
+        run: |
+          $maxAttempts = 3
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            Write-Host "CMake configure attempt $attempt of $maxAttempts"
+            cmake -B build `
+              -G "Visual Studio 17 2022" -A x64 `
+              -DCMAKE_TOOLCHAIN_FILE="dependencies/maplibre-native/platform/windows/custom-toolchain.cmake" `
+              -DMLN_WITH_OPENGL=OFF `
+              -DMLN_WITH_EGL=OFF `
+              -DMLN_WITH_VULKAN=ON `
+              "-DCMAKE_CXX_FLAGS=/wd4267"
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -lt $maxAttempts) {
+              Write-Host "Attempt $attempt failed (exit $LASTEXITCODE), cleaning and retrying..."
+              Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
+            } else { exit $LASTEXITCODE }
+          }
 
-      - name: Build
-        working-directory: dependencies/maplibre-native-ffi
-        env:
-          MISE_ENV: ${{ matrix.variant }}
-        run: mise run build
-
-      - name: Prepare native artifact
-        working-directory: dependencies/maplibre-native-ffi
-        env:
-          MISE_ENV: ${{ matrix.variant }}
-        run: mise run ci:prepare-native-artifact
+      - name: Build mbgl-cabi
+        run: cmake --build build --target mbgl-cabi --config Release --parallel
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: native-mln-${{ matrix.variant }}
-          # ci:prepare-native-artifact stages the DLL at ci-artifact/build/<variant>/
-          path: dependencies/maplibre-native-ffi/ci-artifact/build/${{ matrix.variant }}/
-          if-no-files-found: error
+          name: native-mln-windows-x64-vulkan
+          path: build/**/mbgl-cabi.dll
           retention-days: 7

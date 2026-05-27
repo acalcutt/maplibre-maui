@@ -1,11 +1,4 @@
-name: Native Apple MLN (maplibre_native_c)
-# Builds libmaplibre_native_c.a using the maplibre-native-ffi CMake build
-# with the Xcode generator.  Metal is the render backend for Apple platforms.
-#
-# macOS arm64 uses the mise-based build (macos-arm64-metal variant) which
-# provides all pixi-managed dependencies automatically.  iOS arm64 and
-# macCatalyst use direct CMake + Xcode since there are no upstream mise
-# variants for those targets yet.
+name: Native Apple Metal
 
 on:
   workflow_call:
@@ -14,61 +7,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # ─── macOS arm64 (via mise + pixi, like upstream CI) ─────────────────────
-  build-macos:
-    name: macOS arm64 Metal (mise)
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: false
-
-      - name: Init maplibre-native-ffi submodule
-        run: git submodule update --init dependencies/maplibre-native-ffi
-
-      - name: Cache maplibre-native source tree
-        uses: actions/cache@v4
-        with:
-          path: |
-            dependencies/maplibre-native-ffi/third_party/maplibre-native
-            .git/modules/dependencies/maplibre-native-ffi/modules/third_party/maplibre-native
-          key: mln-src-v1-${{ hashFiles('dependencies/maplibre-native-ffi/.gitmodules', 'dependencies/maplibre-native-ffi/cmake/mln_version.cmake') }}
-
-      - name: Init maplibre-native submodule inside ffi (shallow)
-        working-directory: dependencies/maplibre-native-ffi
-        run: git submodule update --init --depth 1 third_party/maplibre-native
-
-      - name: Set up CI dependencies (mise + sccache)
-        uses: ./dependencies/maplibre-native-ffi/.github/actions/setup-ci-deps
-
-      - name: Configure
-        working-directory: dependencies/maplibre-native-ffi
-        env:
-          MISE_ENV: macos-arm64-metal
-        run: mise run configure
-
-      - name: Build
-        working-directory: dependencies/maplibre-native-ffi
-        env:
-          MISE_ENV: macos-arm64-metal
-        run: mise run build
-
-      - name: Prepare native artifact
-        working-directory: dependencies/maplibre-native-ffi
-        env:
-          MISE_ENV: macos-arm64-metal
-        run: mise run ci:prepare-native-artifact
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-mln-macos-arm64-metal
-          path: dependencies/maplibre-native-ffi/ci-artifact/build/macos-arm64-metal/
-          if-no-files-found: error
-          retention-days: 7
-
-  # ─── iOS arm64 + macCatalyst (direct CMake + Xcode, no mise variant yet) ─
-  build-apple:
+  build:
     name: ${{ matrix.name }}
     runs-on: macos-14
     strategy:
@@ -86,7 +25,7 @@ jobs:
             cmake-system: Darwin
             cmake-sysroot: macosx
             cmake-archs: "x86_64;arm64"
-            extra-flags: -DCMAKE_XCODE_ATTRIBUTE_SUPPORTS_MACCATALYST=YES
+            extra-flags: -DCMAKE_XCODE_ATTRIBUTE_SUPPORTS_MACCATALYST=YES -DMLN_WITH_GLFW=OFF
             artifact: native-mln-maccatalyst
 
     steps:
@@ -95,54 +34,31 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          submodules: false
-
-      - name: Init maplibre-native-ffi submodule
-        run: git submodule update --init dependencies/maplibre-native-ffi
-
-      - name: Cache maplibre-native source tree
-        uses: actions/cache@v4
-        with:
-          path: |
-            dependencies/maplibre-native-ffi/third_party/maplibre-native
-            .git/modules/dependencies/maplibre-native-ffi/modules/third_party/maplibre-native
-          key: mln-src-v1-${{ hashFiles('dependencies/maplibre-native-ffi/.gitmodules', 'dependencies/maplibre-native-ffi/cmake/mln_version.cmake') }}
-
-      - name: Init maplibre-native submodule inside ffi (shallow, recursive)
-        working-directory: dependencies/maplibre-native-ffi
-        run: git submodule update --init --recursive --depth 1 third_party/maplibre-native
+          submodules: recursive
 
       - name: Configure CMake
         run: |
           cmake -B build -G Xcode \
-            -S dependencies/maplibre-native-ffi \
             -DCMAKE_SYSTEM_NAME=${{ matrix.cmake-system }} \
             -DCMAKE_OSX_ARCHITECTURES="${{ matrix.cmake-archs }}" \
             -DCMAKE_OSX_SYSROOT=${{ matrix.cmake-sysroot }} \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
             ${{ matrix.extra-flags }} \
-            -DMLN_FFI_RENDER_BACKEND=metal
+            -DMLN_WITH_METAL=ON
 
-      - name: Build maplibre_native_c
-        timeout-minutes: 60
-        run: cmake --build build --target maplibre_native_c --config Release
+      - name: Build mbgl-cabi
+        run: cmake --build build --target mbgl-cabi --config Release
 
-      - name: Stage built library
-        id: stage
+      - name: Locate built library
+        id: find-lib
         run: |
-          mkdir -p artifact
-          LIB=$(find build -name "libmaplibre_native_c.a" | head -1)
-          if [ -z "$LIB" ]; then
-            echo "ERROR: libmaplibre_native_c.a not found in build/" >&2
-            exit 1
-          fi
-          cp "$LIB" artifact/
-          echo "Staged: $LIB"
+          LIB=$(find build -name "libmbgl-cabi.a" | head -1)
+          echo "path=$LIB" >> "$GITHUB_OUTPUT"
+          echo "Found: $LIB"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: artifact/
-          if-no-files-found: error
+          path: ${{ steps.find-lib.outputs.path }}
           retention-days: 7
