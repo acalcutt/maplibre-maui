@@ -49,7 +49,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        StylePicker.ItemsSource   = [.. Styles.Keys];
+        StylePicker.ItemsSource   = Styles.Keys;
         StylePicker.SelectedIndex = 0;
     }
 
