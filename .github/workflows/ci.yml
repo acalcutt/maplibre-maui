@@ -126,7 +126,7 @@ jobs:
   pack-wpf:
     name: Pack WPF NuGet + Windows samples
     runs-on: windows-latest
-    needs: [version, build-windows]
+    needs: [version, build-windows, pack]
 
     steps:
       - uses: actions/checkout@v4
@@ -158,6 +158,15 @@ jobs:
             -c Release \
             -p:Version=${{ needs.version.outputs.version }} \
             -o artifacts/
+
+      - name: Download NuGet packages (for local feed)
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages-ci
+          path: local-feed
+
+      - name: Add local NuGet feed
+        run: dotnet nuget add source "${{ github.workspace }}\local-feed" --name local-ci
 
       - name: Publish ConsoleExample (win-x64)
         shell: bash
