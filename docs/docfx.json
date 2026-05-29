@@ -1,0 +1,53 @@
+{
+    "metadata": [
+        {
+            "src": [
+                {
+                    "src": "../",
+                    "files": [
+                        "bindings/**/*.cs",
+                        "handlers/**/*.cs",
+                        "wpf/**/*.cs"
+                    ],
+                    "exclude": [
+                        "**/obj/**",
+                        "**/bin/**",
+                        "**/*.Designer.cs"
+                    ]
+                }
+            ],
+            "dest": "api",
+            "includePrivateMembers": false,
+            "disableGitFeatures": false,
+            "disableDefaultFilter": false,
+            "allowCompilationErrors": true
+        }
+    ],
+    "build": {
+        "content": [
+            {
+                "files": ["**/*.yml", "**/*.md"],
+                "src": ".",
+                "exclude": ["_site/**", "obj/**"]
+            }
+        ],
+        "resource": [
+            {
+                "files": ["images/**"]
+            }
+        ],
+        "output": "_site",
+        "template": ["default", "modern"],
+        "globalMetadata": {
+            "_appName": "MapLibreNative.Maui",
+            "_appTitle": "MapLibreNative.Maui",
+            "_appFooter": "MapLibreNative.Maui — MapLibre Native for .NET MAUI and WPF",
+            "_enableSearch": true
+        },
+        "fileMetadata": {},
+        "postProcessors": [],
+        "keepFileLink": false,
+        "cleanupCacheHistory": false,
+        "disableGitFeatures": false
+    }
+}
