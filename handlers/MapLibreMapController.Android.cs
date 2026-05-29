@@ -1,8 +1,12 @@
 ﻿#if ANDROID
 using Android.Views;
+using Android.Widget;
 using Android.Runtime;
+using Android.Text;
+using Android.Text.Method;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using MapLibreNative.Maui;
 using MapLibreNative.Maui.Handlers.Geometry;
 using Map    = MapLibreNative.Maui.Handlers.Maps.Map;
@@ -49,8 +53,12 @@ public class MapLibreMapController : IMapLibreMapController
     private bool          _styleReady;
 
     private readonly SurfaceCallback _surfaceCb;
+    private SurfaceView     _surfaceView = null!;
+    private TextView        _attrView    = null!;
+    private bool            _showAttrControl  = true;
+    private string?         _customAttribution;
 
-    public SurfaceView View { get; }
+    public FrameLayout View { get; private set; } = null!;
 
     // -- Events ----------------------------------------------------------------
 
@@ -75,14 +83,38 @@ public class MapLibreMapController : IMapLibreMapController
         _pixelRatio  = pixelRatio;
         _styleString = styleString;
 
-        View = new SurfaceView(Android.App.Application.Context);
+        var ctx = Android.App.Application.Context!;
+
+        _surfaceView = new SurfaceView(ctx);
         _surfaceCb = new SurfaceCallback
         {
             Created   = OnSurfaceCreated,
             Changed   = OnSurfaceChanged,
             Destroyed = _ => DisposeNative(),
         };
-        View.Holder!.AddCallback(_surfaceCb);
+        _surfaceView.Holder!.AddCallback(_surfaceCb);
+
+        // Attribution overlay (bottom-right corner, OSM licence compliance)
+        _attrView = new TextView(ctx);
+        _attrView.SetTextSize(Android.Util.ComplexUnitType.Sp, 10f);
+        _attrView.SetTextColor(Android.Graphics.Color.Argb(220, 50, 50, 50));
+        _attrView.SetBackgroundColor(Android.Graphics.Color.Argb(180, 255, 255, 255));
+        _attrView.SetPadding(8, 4, 8, 4);
+        _attrView.MovementMethod = LinkMovementMethod.Instance;
+        _attrView.Visibility = ViewStates.Gone;
+
+        var container = new FrameLayout(ctx);
+        container.AddView(_surfaceView, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MatchParent,
+            ViewGroup.LayoutParams.MatchParent));
+        var attrParams = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WrapContent,
+            ViewGroup.LayoutParams.WrapContent,
+            GravityFlags.Bottom | GravityFlags.End);
+        attrParams.SetMargins(0, 0, 8, 8);
+        container.AddView(_attrView, attrParams);
+
+        View = container;
     }
 
     // -- Surface lifecycle -----------------------------------------------------
@@ -92,8 +124,8 @@ public class MapLibreMapController : IMapLibreMapController
         var surface = holder.Surface!;
         _nativeWindow = NativeMethods.AndroidAcquireWindow(JNIEnv.Handle, surface.Handle);
 
-        int w = Math.Max(1, View.Width);
-        int h = Math.Max(1, View.Height);
+        int w = Math.Max(1, _surfaceView.Width);
+        int h = Math.Max(1, _surfaceView.Height);
         InitMaplibre(w, h);
     }
 
@@ -138,9 +170,11 @@ public class MapLibreMapController : IMapLibreMapController
             case "onDidFinishLoadingStyle":
                 _styleReady = true;
                 _style = _map?.GetStyle();
+                RefreshAttribution();
                 OnStyleLoadedReceived?.Invoke(new Style(null));
                 break;
             case "onDidBecomeIdle":
+                if (_attrView.Text?.Length == 0) RefreshAttribution();
                 OnDidBecomeIdleReceived?.Invoke();
                 break;
             case "onCameraIsChanging":
@@ -196,7 +230,103 @@ public class MapLibreMapController : IMapLibreMapController
     public void SetAttributionButtonGravity(int v)            { }
     public void SetAttributionButtonMargins(int x, int y)     { }
     public void SetShowNavigationControls(bool show)          { }
-    public void SetShowAttributionControl(bool show, string? customAttribution) { }
+    public void SetShowAttributionControl(bool show, string? customAttribution)
+    {
+        _showAttrControl   = show;
+        _customAttribution = customAttribution;
+        RefreshAttribution();
+    }
+
+    // -- Attribution -----------------------------------------------------------
+
+    private void RefreshAttribution()
+    {
+        if (_style == null) { _attrView.Visibility = ViewStates.Gone; return; }
+
+        var parts = new System.Collections.Generic.List<string>(_style.GetSourceAttributions());
+        if (!string.IsNullOrWhiteSpace(_customAttribution))
+            parts.Add(_customAttribution!);
+
+        if (parts.Count == 0 || !_showAttrControl)
+        {
+            _attrView.Visibility = ViewStates.Gone;
+            return;
+        }
+
+        var spanned = BuildAttributionSpanned(parts);
+        _attrView.TextFormatted = spanned;
+        _attrView.Visibility = ViewStates.Visible;
+    }
+
+    private static ISpanned BuildAttributionSpanned(
+        System.Collections.Generic.List<string> parts)
+    {
+        // Parse each part's HTML <a href> tags into URLSpans so links are clickable.
+        var sb  = new SpannableStringBuilder();
+        var hrefRe = new Regex(
+            @"<a\b[^>]*?href=[""']?([^""'\s>]+)[""']?[^>]*>(.*?)</a>",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+        bool first = true;
+        foreach (var part in parts)
+        {
+            if (!first) sb.Append(" | ");
+            first = false;
+
+            int pos = 0;
+            foreach (Match m in hrefRe.Matches(part))
+            {
+                // Plain text before this <a>
+                if (m.Index > pos)
+                    sb.Append(DecodeHtmlEntities(StripHtmlTags(part[pos..m.Index])));
+
+                // Link text with URLSpan
+                string href     = m.Groups[1].Value;
+                string linkText = DecodeHtmlEntities(StripHtmlTags(m.Groups[2].Value));
+                int start = sb.Length();
+                sb.Append(linkText);
+                if (Uri.TryCreate(href, UriKind.Absolute, out _))
+                    sb.SetSpan(new Android.Text.Style.URLSpan(href),
+                               start, sb.Length(),
+                               SpanTypes.InclusiveInclusive);
+
+                pos = m.Index + m.Length;
+            }
+            // Remaining text
+            if (pos < part.Length)
+                sb.Append(DecodeHtmlEntities(StripHtmlTags(part[pos..])));
+        }
+        return sb;
+    }
+
+    private static string StripHtmlTags(string html)
+    {
+        if (string.IsNullOrEmpty(html)) return html;
+        var sb2   = new System.Text.StringBuilder(html.Length);
+        bool inTag = false;
+        foreach (char c in html)
+        {
+            if      (c == '<') inTag = true;
+            else if (c == '>') inTag = false;
+            else if (!inTag)   sb2.Append(c);
+        }
+        return sb2.ToString().Trim();
+    }
+
+    private static string DecodeHtmlEntities(string text)
+    {
+        if (string.IsNullOrEmpty(text) || !text.Contains('&')) return text;
+        return text
+            .Replace("&amp;",   "&")
+            .Replace("&lt;",    "<")
+            .Replace("&gt;",    ">")
+            .Replace("&quot;",  "\"")
+            .Replace("&#39;",   "'")
+            .Replace("&nbsp;",  "\u00A0")
+            .Replace("&copy;",  "\u00A9")
+            .Replace("&reg;",   "\u00AE")
+            .Replace("&trade;", "\u2122");
+    }
 
     // -- Sources ---------------------------------------------------------------
 
