@@ -7,7 +7,7 @@
 | Package | Description |
 |---|---|
 | `MapLibreNative.Maui` | Core P/Invoke bindings to `mln-cabi.dll` — `MbglMap`, `MbglStyle`, `NativeMethods`, etc. |
-| `MapLibreNative.Maui.Vulkan` | Upstream MLN P/Invoke layer (`MlnMap`, `MlnRuntime`) for Vulkan-enabled builds |
+| `MapLibreNative.Maui.Vulkan` | Drop-in replacement for `MapLibreNative.Maui` that ships Vulkan-enabled (Windows/Android) and Metal-enabled (iOS/macCatalyst) native DLLs — same C# API, different renderer |
 | `MapLibreNative.Maui.Handlers` | .NET MAUI `MapLibreMap` view + handlers for Android, iOS, macCatalyst and Windows |
 | `MapLibreNative.Maui.WPF` | WPF `MlnMapHost` — a `HwndHost`-backed control for classic WPF apps |
 
