@@ -902,7 +902,7 @@ public class MlnMapHost : HwndHost
             TextWrapping  = TextWrapping.Wrap,
             FontSize      = 10,
             Foreground    = Brushes.Black,
-            MaxWidth      = 320,
+            MaxWidth      = 320,  // Will be dynamically adjusted in PositionAttributionPopup
         };
 
         _attributionBorder = new Border
@@ -966,10 +966,35 @@ public class MlnMapHost : HwndHost
     private void PositionAttributionPopup()
     {
         if (_attributionPopup == null || !_initialized) return;
+        
+        // Constrain attribution width to map width minus margins
+        if (_attributionText != null)
+        {
+            _attributionText.MaxWidth = Math.Max(100, ActualWidth - 8);
+        }
+        
+        // Start at bottom-left corner with small margin
+        double leftMargin = 4;
+        double bottomMargin = 22;
+        
+        // Measure the actual rendered size of the attribution
+        if (_attributionBorder != null)
+        {
+            _attributionBorder.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var popupWidth = _attributionBorder.DesiredSize.Width;
+            
+            // If popup would extend beyond right edge, adjust horizontal offset
+            if (leftMargin + popupWidth > ActualWidth)
+            {
+                // Align to right edge with margin instead
+                leftMargin = Math.Max(4, ActualWidth - popupWidth - 4);
+            }
+        }
+        
         // With PlacementMode.Relative, offsets are in logical pixels relative to the
-        // PlacementTarget (this HwndHost). Place attribution at bottom-left.
-        _attributionPopup.HorizontalOffset = 4;
-        _attributionPopup.VerticalOffset   = ActualHeight - 22;
+        // PlacementTarget (this HwndHost). Place attribution at bottom with constraint.
+        _attributionPopup.HorizontalOffset = leftMargin;
+        _attributionPopup.VerticalOffset   = ActualHeight - bottomMargin;
     }
 
     private void UpdateAttributionPopupOpen()
