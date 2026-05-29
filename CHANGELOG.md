@@ -35,17 +35,15 @@
 
 ### 🐞 Bug fixes
 
-## 1.2.0
+## 2.0.1
 ### ✨ Features and improvements
-- **C ABI typed handles** — `mbgl_map_t*`, `mbgl_frontend_t*`, `mbgl_runloop_t*` are now distinct opaque types; eliminates handle mix-up bugs at compile time
-- **Status codes** — All mutating C ABI functions now return `mbgl_status_t` (`0 = OK`, `1 = NullHandle`, `2 = InvalidArg`); C# P/Invokes return `MbglStatus` enum
-- **Debug overlays** — `mbgl_map_get_debug_options` / `mbgl_map_set_debug_options` exposed; `IMapLibreMapController.GetDebugOptions()` / `SetDebugOptions(int)` added to all platforms
-- **Style inspection** — `IMapLibreMapController.GetStyleUrl()`, `GetStyleSourceIds()`, `GetStyleLayerIds()` added to all platforms
-- **Layer read-back and visibility** — `IMapLibreMapController.GetLayerPaintProperty`, `GetLayerLayoutProperty`, `GetLayerVisibility`, `SetLayerVisibility` added to all platforms
-- **Source attribution** — `MbglSource.GetAttribution()` returns the TileJSON attribution string
-- **Log callback** — `NativeMethods.InstallLogCallback(LogFn)` lets the host intercept MapLibre native log messages; `MbglLogLevel` enum provided
-- **`noexcept` guarantees** — All C ABI entry points are marked `noexcept`; exceptions are caught internally and surfaced via `mbgl_get_last_error()`
-- Sample app: debug overlay toggle switch (TileBorders + Collision) demonstrates `SetDebugOptions` at runtime
+- **C ABI typed handles** — `mbgl_map_t*`, `mbgl_frontend_t*`, `mbgl_runloop_t*` are now distinct opaque types; eliminates handle mix-up bugs at compile time (see 1.2.0 for full details, landed here)
+- **Status codes, debug options, log callback** — see 1.2.0 feature list; all shipped in this release
+
+### 🐞 Bug fixes
+- **Windows MAUI DPI fallback** — `GetDpiForWindow` returns a scale factor (e.g. `1.25`), not raw DPI; the fallback when no window is available was incorrectly `96.0f` (which set `_pixelRatio` to 96×), corrected to `1.0f`
+- **WPF popup DPI scaling** — Navigation and attribution popups switched from `PlacementMode.AbsolutePoint` + `PointToScreen` to `PlacementMode.Relative`; `AbsolutePoint` double-scaled logical offsets at DPI settings above 100%
+- **WPF DPI on resize** — `_dpi` is now refreshed inside `OnRenderSizeChanged` so moving the window to a monitor with a different DPI (e.g. laptop screen → 4K external) keeps physical pixel dimensions in sync
 
 ## 2.0.0
 ### ✨ Features and improvements
@@ -62,15 +60,17 @@
 - **CI vcpkg cache abort** — `actions/cache@v4` restore failure on Windows native builds was killing all downstream steps. Added `continue-on-error: true` to the cache step in `native-windows.yml` and `native-windows-vulkan.yml` so a cache miss falls through to a clean vcpkg build
 - **CI NuGet local feed path** — `dotnet nuget add source local-feed` used a relative path that NuGet resolved against the user profile instead of the workspace. Fixed to use `"${{ github.workspace }}\local-feed"` (absolute path)
 
-## 2.0.1
+## 1.2.0
 ### ✨ Features and improvements
-- **C ABI typed handles** — `mbgl_map_t*`, `mbgl_frontend_t*`, `mbgl_runloop_t*` are now distinct opaque types; eliminates handle mix-up bugs at compile time (see 1.2.0 for full details, landed here)
-- **Status codes, debug options, log callback** — see 1.2.0 feature list; all shipped in this release
-
-### 🐞 Bug fixes
-- **Windows MAUI DPI fallback** — `GetDpiForWindow` returns a scale factor (e.g. `1.25`), not raw DPI; the fallback when no window is available was incorrectly `96.0f` (which set `_pixelRatio` to 96×), corrected to `1.0f`
-- **WPF popup DPI scaling** — Navigation and attribution popups switched from `PlacementMode.AbsolutePoint` + `PointToScreen` to `PlacementMode.Relative`; `AbsolutePoint` double-scaled logical offsets at DPI settings above 100%
-- **WPF DPI on resize** — `_dpi` is now refreshed inside `OnRenderSizeChanged` so moving the window to a monitor with a different DPI (e.g. laptop screen → 4K external) keeps physical pixel dimensions in sync
+- **C ABI typed handles** — `mbgl_map_t*`, `mbgl_frontend_t*`, `mbgl_runloop_t*` are now distinct opaque types; eliminates handle mix-up bugs at compile time
+- **Status codes** — All mutating C ABI functions now return `mbgl_status_t` (`0 = OK`, `1 = NullHandle`, `2 = InvalidArg`); C# P/Invokes return `MbglStatus` enum
+- **Debug overlays** — `mbgl_map_get_debug_options` / `mbgl_map_set_debug_options` exposed; `IMapLibreMapController.GetDebugOptions()` / `SetDebugOptions(int)` added to all platforms
+- **Style inspection** — `IMapLibreMapController.GetStyleUrl()`, `GetStyleSourceIds()`, `GetStyleLayerIds()` added to all platforms
+- **Layer read-back and visibility** — `IMapLibreMapController.GetLayerPaintProperty`, `GetLayerLayoutProperty`, `GetLayerVisibility`, `SetLayerVisibility` added to all platforms
+- **Source attribution** — `MbglSource.GetAttribution()` returns the TileJSON attribution string
+- **Log callback** — `NativeMethods.InstallLogCallback(LogFn)` lets the host intercept MapLibre native log messages; `MbglLogLevel` enum provided
+- **`noexcept` guarantees** — All C ABI entry points are marked `noexcept`; exceptions are caught internally and surfaced via `mbgl_get_last_error()`
+- Sample app: debug overlay toggle switch (TileBorders + Collision) demonstrates `SetDebugOptions` at runtime
 
 ## 1.1.1
 ### 🐞 Bug fixes
