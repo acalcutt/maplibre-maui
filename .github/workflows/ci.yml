@@ -121,7 +121,7 @@ jobs:
 
       - name: Pack Maui.Maplibre.Handlers
         run: |
-          dotnet pack handlers/Maui.Maplibre.Handlers.csproj \
+          dotnet pack handlers/MapLibreNative.Maui.Handlers.csproj \
             -c Release \
             -p:Version=${{ needs.version.outputs.version }} \
             -o artifacts/
@@ -165,7 +165,7 @@ jobs:
       - name: Pack Maui.MapLibre.WPF
         shell: bash
         run: |
-          dotnet pack wpf/Maui.MapLibre.WPF.csproj \
+          dotnet pack wpf/MapLibreNative.Maui.WPF.csproj \
             -c Release \
             -p:Version=${{ needs.version.outputs.version }} \
             -o artifacts/
@@ -362,7 +362,7 @@ jobs:
 
       - name: Pack Maui.MapLibre.Native.Vulkan
         run: |
-          dotnet pack bindings/Maui.MapLibre.Native.Vulkan.csproj \
+          dotnet pack bindings/MapLibreNative.Maui.Vulkan.csproj \
             -c Release \
             -p:Version=${{ needs.version.outputs.version }} \
             -p:_MlnNativeDir=$(pwd)/bindings/native-vulkan/ \
