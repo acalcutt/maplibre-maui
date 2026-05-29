@@ -955,7 +955,10 @@ public class MlnMapHost : HwndHost
             .Replace("&gt;", ">")
             .Replace("&quot;", "\"")
             .Replace("&#39;", "'")
-            .Replace("&nbsp;", " ");
+            .Replace("&nbsp;", " ")
+            .Replace("&copy;", "©")
+            .Replace("&reg;", "®")
+            .Replace("&trade;", "™");
         
         return decoded.Trim();
     }
