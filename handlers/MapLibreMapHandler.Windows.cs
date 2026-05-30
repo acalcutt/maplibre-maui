@@ -53,11 +53,10 @@ public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Microsoft.UI.
 
         _controller.Init();
 
-        // On window maximize/restore MAUI does not always re-measure the page, so
-        // View.ActualHeight (and thus the map/nav layout) stays stale until a manual
-        // resize. The host Window.SizeChanged DOES fire — use it only to invalidate
-        // layout. MAUI's own View.SizeChanged then runs the real resize, so we avoid
-        // racing it with stale dimensions.
+        // On window maximize/restore MAUI does not re-arrange the page on its own,
+        // so the map View keeps its old (too-short) height and the nav panel stays
+        // hidden until a tab switch. The host Window.SizeChanged DOES fire — use it
+        // to force a re-layout so View.SizeChanged runs the real resize.
         _hostWindow = window;
         if (_hostWindow != null)
             _hostWindow.SizeChanged += OnHostWindowSizeChanged;
@@ -69,11 +68,18 @@ public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Microsoft.UI.
 
     private void OnHostWindowSizeChanged(object sender, Microsoft.UI.Xaml.WindowSizeChangedEventArgs e)
     {
-        // Invalidate the MAUI virtual view (not just the WinUI element) so MAUI's
-        // cross-platform arrange pass re-runs with the new window size. That updates
-        // View.ActualHeight and fires the WinUI SizeChanged the controller listens
-        // to, which performs the real GL/overlay resize and re-shows the nav panel.
-        (VirtualView as Microsoft.Maui.IView)?.InvalidateMeasure();
+        // On maximize/restore MAUI does NOT re-arrange the page's map View on its
+        // own (only a tab switch does), so View.SizeChanged never fires and the
+        // map/nav layout stays stuck at the old, too-short height. Force a
+        // synchronous re-layout of the whole window content root: this re-runs
+        // MAUI's measure/arrange down to the map Grid, which fires its SizeChanged
+        // and triggers the real GL/overlay resize that re-shows the nav panel.
+        if (sender is Microsoft.UI.Xaml.Window w &&
+            w.Content is Microsoft.UI.Xaml.FrameworkElement root)
+        {
+            root.InvalidateMeasure();
+            root.UpdateLayout();
+        }
     }
 
     // ── Input events ──────────────────────────────────────────────────────────
