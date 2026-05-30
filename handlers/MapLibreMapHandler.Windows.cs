@@ -15,6 +15,16 @@ public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Microsoft.UI.
     private string _styleUrl = string.Empty;
     private Microsoft.UI.Xaml.Window? _hostWindow;
 
+    private static int _instanceCounter;
+    private readonly int _instanceId = System.Threading.Interlocked.Increment(ref _instanceCounter);
+    private static readonly string _hdiagPath =
+        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "maplibre_maui_diag.log");
+    private void HDiag(string msg)
+    {
+        try { System.IO.File.AppendAllText(_hdiagPath, $"{DateTime.Now:HH:mm:ss.fff} [hnd#{_instanceId}] {msg}\r\n"); }
+        catch { /* ignore */ }
+    }
+
     // Input tracking
     private bool   _isDragging;
     private double _lastPointerX;
@@ -60,42 +70,36 @@ public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Microsoft.UI.
         _hostWindow = window;
         if (_hostWindow != null)
             _hostWindow.SizeChanged += OnHostWindowSizeChanged;
-        DiagLog($"CreatePlatformView window={(window != null)} dpi={dpi}");
 
         var view = _controller.View;
         AttachInputEvents(view);
+        HDiag("CreatePlatformView (handler connected)");
         return view;
     }
+
     private void OnHostWindowSizeChanged(object sender, Microsoft.UI.Xaml.WindowSizeChangedEventArgs e)
     {
         if (sender is not Microsoft.UI.Xaml.Window w) return;
+
+        HDiag($"HostSizeChanged {e.Size.Width}x{e.Size.Height}");
 
         // The window is already at its new size here, but the framework has not yet
         // arranged window.Content to fill it (root still reports the old size), so a
         // synchronous re-layout is a no-op. Defer to Low priority so it runs AFTER
         // the window's own layout pass — by then the root has the new size and
-        // re-measuring propagates it down to the map Grid, firing View.SizeChanged.
+        // re-measuring propagates it down to the map Grid, firing View.SizeChanged
+        // which performs the real GL/overlay resize and re-shows the nav panel.
         w.DispatcherQueue?.TryEnqueue(
             Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
             () =>
             {
-                if (w.Content is not Microsoft.UI.Xaml.FrameworkElement root) return;
-                double before = _controller?.View?.ActualHeight ?? -1;
-                root.InvalidateMeasure();
-                root.UpdateLayout();
-                DiagLog($"PostLayout size={e.Size.Width}x{e.Size.Height} " +
-                        $"rootActual={root.ActualWidth}x{root.ActualHeight} " +
-                        $"viewBefore={before} viewAfter={_controller?.View?.ActualHeight ?? -1}");
+                if (w.Content is Microsoft.UI.Xaml.FrameworkElement root)
+                {
+                    root.InvalidateMeasure();
+                    root.UpdateLayout();
+                    HDiag($"PostLayout rootActual={root.ActualWidth}x{root.ActualHeight}");
+                }
             });
-    }
-
-    private static readonly string _diagPath =
-        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "maplibre_maui_diag.log");
-    private static void DiagLog(string msg)
-    {
-        try { System.IO.File.AppendAllText(_diagPath, $"{DateTime.Now:HH:mm:ss.fff} {msg}\r\n"); }
-        catch { /* ignore */ }
-        System.Diagnostics.Debug.WriteLine($"[MapLibre.Diag] {msg}");
     }
 
     // ── Input events ──────────────────────────────────────────────────────────
@@ -202,6 +206,7 @@ public partial class MapLibreMapHandler : ViewHandler<MapLibreMap, Microsoft.UI.
 
     protected override void DisconnectHandler(Microsoft.UI.Xaml.Controls.Grid platformView)
     {
+        HDiag("DisconnectHandler (handler disconnected - e.g. tab switch away)");
         // Shutdown the GL popup and native mbgl resources BEFORE base removes the
         // platform view from the visual tree. This guarantees the dispatcher timer
         // is stopped and the HWND is destroyed even in navigation patterns where

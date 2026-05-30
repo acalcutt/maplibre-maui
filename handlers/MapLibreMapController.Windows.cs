@@ -636,6 +636,13 @@ public class MapLibreMapController : IMapLibreMapController
         // Keep popup aligned with the View on every tick (track window moves).
         UpdateChildWindowPosition();
 
+        if ((++_diagTick % 60) == 0)
+        {
+            int rectH = -1;
+            if (_childHwnd != IntPtr.Zero) { GetWindowRect(_childHwnd, out var dr); rectH = dr.Bottom - dr.Top; }
+            CtrlDiag($"tick init={_initialized} loaded={View.IsLoaded} viewH={View.ActualHeight} childRectH={rectH} navFits={NavFitsCurrentHeight()} showNav={_showNavControls}");
+        }
+
         if (_renderNeedsUpdate && _hGLRC != IntPtr.Zero && _hDC != IntPtr.Zero && _frontend != null)
         {
             _renderNeedsUpdate = false;
@@ -704,6 +711,7 @@ public class MapLibreMapController : IMapLibreMapController
 
     private void OnViewSizeChanged(Microsoft.Maui.Graphics.Size newSize)
     {
+        CtrlDiag($"OnViewSizeChanged {newSize.Width}x{newSize.Height} init={_initialized}");
         if (!_initialized) return;
         int physW = Math.Max(1, (int)(newSize.Width  * _pixelRatio));
         int physH = Math.Max(1, (int)(newSize.Height * _pixelRatio));
@@ -1091,6 +1099,15 @@ public class MapLibreMapController : IMapLibreMapController
 
         PositionOverlays();
         ShowOverlays();
+    }
+
+    private static readonly string _ctrlDiagPath =
+        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "maplibre_maui_diag.log");
+    private int _diagTick;
+    private static void CtrlDiag(string msg)
+    {
+        try { System.IO.File.AppendAllText(_ctrlDiagPath, $"{DateTime.Now:HH:mm:ss.fff} [ctrl] {msg}\r\n"); }
+        catch { /* ignore */ }
     }
 
     /// <summary>Show/hide overlays based on current enabled flags.</summary>
