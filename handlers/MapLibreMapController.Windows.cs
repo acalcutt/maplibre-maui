@@ -716,7 +716,18 @@ public class MapLibreMapController : IMapLibreMapController
         _map?.TriggerRepaint();
     }
 
-    private void UpdateChildWindowPosition()
+    /// <summary>
+    /// Re-aligns the GL popup and overlays after a host-window state change
+    /// (maximize ↔ restore, monitor move) that MAUI's View.SizeChanged does not
+    /// report. The caller must invalidate layout first so View.ActualHeight is
+    /// fresh; otherwise the nav panel keeps its stale position until a manual
+    /// resize forces a re-measure.
+    /// </summary>
+    public void OnHostWindowResized()
+    {
+        if (!_initialized) return;
+        OnViewSizeChanged(new Microsoft.Maui.Graphics.Size(View.ActualWidth, View.ActualHeight));
+    }
     {
         if (_childHwnd == IntPtr.Zero || !View.IsLoaded) return;
 
@@ -1205,10 +1216,16 @@ public class MapLibreMapController : IMapLibreMapController
             }
         }
 
-        // Re-evaluate nav visibility — the map may have shrunk below the
-        // minimum height (or grown back) since the last call.
-        ShowOverlays();
+        // Re-evaluate nav visibility only when the fit state actually flips. A resize
+        // can run this while the GL window still reports a stale height, so the 50ms
+        // overlay timer also calls PositionOverlays() to self-heal once height settles.
+        if (navFits != _lastNavFits)
+        {
+            _lastNavFits = navFits;
+            ShowOverlays();
+        }
     }
+    private bool _lastNavFits = true;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct SIZE { public int cx; public int cy; }
@@ -1531,7 +1548,8 @@ public class MapLibreMapController : IMapLibreMapController
         switch (msg)
         {
             case WM_TIMER when (uint)wParam.ToInt64() == OverlayZTimerId:
-                RaiseOverlays();
+                PositionOverlays();  // self-heal size/visibility (e.g. map grew tall enough for nav)
+                RaiseOverlays();     // re-assert overlays above the GL popup
                 return IntPtr.Zero;
 
             case WM_SETCURSOR:
