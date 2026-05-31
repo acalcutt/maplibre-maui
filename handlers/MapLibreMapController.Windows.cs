@@ -1148,8 +1148,11 @@ public class MapLibreMapController : IMapLibreMapController
                 _diagLastNavVisible = navVisible;
                 CtrlDiag($"ShowOverlays navVisible -> {navVisible} (styleHadVisible={(style & WS_VISIBLE) != 0})");
             }
-            SetWindowLongPtr(_navHwnd, GWL_STYLE,
-                (IntPtr)(navVisible ? (style | WS_VISIBLE) : (style & ~WS_VISIBLE)));
+            // Use SetWindowPos SWP_SHOWWINDOW/SWP_HIDEWINDOW exclusively — do NOT
+            // pre-clear WS_VISIBLE via SetWindowLongPtr before calling SetWindowPos.
+            // Clearing the style bit first causes SetWindowPos to see the window as
+            // already hidden and skip its WM_SHOWWINDOW/DWM notification, leaving
+            // nav pixels on-screen even though IsWindowVisible returns False.
             SetWindowPos(_navHwnd, IntPtr.Zero, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW_OR_HIDE(navVisible));
             if (navVisible)
