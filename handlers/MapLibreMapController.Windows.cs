@@ -1104,9 +1104,12 @@ public class MapLibreMapController : IMapLibreMapController
     private static readonly string _ctrlDiagPath =
         System.IO.Path.Combine(System.IO.Path.GetTempPath(), "maplibre_maui_diag.log");
     private int _diagTick;
-    private static void CtrlDiag(string msg)
+    private static int _ctrlCounter;
+    private readonly int _ctrlId = System.Threading.Interlocked.Increment(ref _ctrlCounter);
+    private bool _diagLastNavVisible;
+    private void CtrlDiag(string msg)
     {
-        try { System.IO.File.AppendAllText(_ctrlDiagPath, $"{DateTime.Now:HH:mm:ss.fff} [ctrl] {msg}\r\n"); }
+        try { System.IO.File.AppendAllText(_ctrlDiagPath, $"{DateTime.Now:HH:mm:ss.fff} [ctrl#{_ctrlId} child=0x{_childHwnd.ToInt64():X} nav=0x{_navHwnd.ToInt64():X}] {msg}\r\n"); }
         catch { /* ignore */ }
     }
 
@@ -1118,6 +1121,11 @@ public class MapLibreMapController : IMapLibreMapController
             // Also hide the nav panel when the map is too short to fit it.
             bool navVisible = _showNavControls && _initialized && NavFitsCurrentHeight();
             uint style = (uint)GetWindowLongA(_navHwnd, GWL_STYLE);
+            if (navVisible != _diagLastNavVisible)
+            {
+                _diagLastNavVisible = navVisible;
+                CtrlDiag($"ShowOverlays navVisible -> {navVisible} (styleHadVisible={(style & WS_VISIBLE) != 0})");
+            }
             SetWindowLongPtr(_navHwnd, GWL_STYLE,
                 (IntPtr)(navVisible ? (style | WS_VISIBLE) : (style & ~WS_VISIBLE)));
             SetWindowPos(_navHwnd, IntPtr.Zero, 0, 0, 0, 0,
