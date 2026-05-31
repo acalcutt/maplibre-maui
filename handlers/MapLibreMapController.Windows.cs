@@ -761,8 +761,8 @@ public class MapLibreMapController : IMapLibreMapController
         int h = Math.Max(1, (int)(View.ActualHeight * _pixelRatio));
 
         SetWindowPos(_childHwnd, IntPtr.Zero, x, y, w, h, SWP_NOACTIVATE | SWP_NOZORDER);
+        RaiseOverlays();     // raise overlays BEFORE positioning so nav is z-top when SWP_SHOWWINDOW triggers WM_PAINT
         PositionOverlays();  // keep overlay windows tracking the map
-        RaiseOverlays();     // re-assert overlays above GL popup (can be scrambled on resize/restore)
 
         if (_logPositionCount < 5)
         {
@@ -1142,6 +1142,8 @@ public class MapLibreMapController : IMapLibreMapController
                 (IntPtr)(navVisible ? (style | WS_VISIBLE) : (style & ~WS_VISIBLE)));
             SetWindowPos(_navHwnd, IntPtr.Zero, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW_OR_HIDE(navVisible));
+            if (navVisible)
+                InvalidateRect(_navHwnd, IntPtr.Zero, true);  // ensure WM_PAINT fires now that nav is z-top
             if (navVisible && _diagDumpNav)
             {
                 _diagDumpNav = false;
