@@ -777,13 +777,19 @@ public class MapLibreMapController : IMapLibreMapController
     private int _logPositionCount;
 
     /// <summary>
-    /// Re-positions the child GL window and overlays using current XAML coordinates.
-    /// Called after a layout pass settles (e.g. window restore from fullscreen) so
-    /// TransformToVisual returns up-to-date values.
+    /// Re-positions the child GL window and overlays using current XAML coordinates,
+    /// and triggers a repaint. Called after a layout pass settles (e.g. window restore
+    /// from minimize or fullscreen) so TransformToVisual returns up-to-date values and
+    /// the GL surface is re-rendered even when the view size hasn't changed.
     /// </summary>
     internal void RefreshPosition()
     {
-        if (_initialized) UpdateChildWindowPosition();
+        if (_initialized)
+        {
+            UpdateChildWindowPosition();
+            _renderNeedsUpdate = true;
+            _map?.TriggerRepaint();
+        }
     }
 
     private IntPtr TryGetXamlIslandHwnd()
