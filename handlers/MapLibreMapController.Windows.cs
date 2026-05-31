@@ -106,6 +106,9 @@ public class MapLibreMapController : IMapLibreMapController
     private static extern bool InvalidateRect(IntPtr hWnd, IntPtr lpRect, bool bErase);
 
     [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(POINT Point);
+
+    [DllImport("user32.dll")]
     private static extern IntPtr SetTimer(IntPtr hWnd, IntPtr nIDEvent, uint uElapse, IntPtr lpTimerFunc);
 
     [DllImport("user32.dll")]
@@ -640,7 +643,15 @@ public class MapLibreMapController : IMapLibreMapController
         {
             int rectH = -1;
             if (_childHwnd != IntPtr.Zero) { GetWindowRect(_childHwnd, out var dr); rectH = dr.Bottom - dr.Top; }
-            CtrlDiag($"tick init={_initialized} loaded={View.IsLoaded} viewH={View.ActualHeight} childRectH={rectH} navFits={NavFitsCurrentHeight()} showNav={_showNavControls}");
+            string who = "n/a";
+            if (_navHwnd != IntPtr.Zero && IsWindowVisible(_navHwnd))
+            {
+                GetWindowRect(_navHwnd, out var nvr);
+                var c = new POINT { X = (nvr.Left + nvr.Right) / 2, Y = (nvr.Top + nvr.Bottom) / 2 };
+                IntPtr at = WindowFromPoint(c);
+                who = at == _navHwnd ? "NAV" : at == _childHwnd ? "CHILD" : $"0x{at.ToInt64():X}";
+            }
+            CtrlDiag($"tick init={_initialized} loaded={View.IsLoaded} viewH={View.ActualHeight} childRectH={rectH} navFits={NavFitsCurrentHeight()} showNav={_showNavControls} navWinVisible={(_navHwnd != IntPtr.Zero && IsWindowVisible(_navHwnd))} topAtNavCenter={who}");
         }
 
         if (_renderNeedsUpdate && _hGLRC != IntPtr.Zero && _hDC != IntPtr.Zero && _frontend != null)
@@ -1137,9 +1148,12 @@ public class MapLibreMapController : IMapLibreMapController
                 GetWindowRect(_navHwnd, out var nr);
                 int cl = -1, ct = -1, cr = -1, cb = -1;
                 if (_childHwnd != IntPtr.Zero) { GetWindowRect(_childHwnd, out var cwr); cl = cwr.Left; ct = cwr.Top; cr = cwr.Right; cb = cwr.Bottom; }
+                var navCenter = new POINT { X = (nr.Left + nr.Right) / 2, Y = (nr.Top + nr.Bottom) / 2 };
+                IntPtr atPoint = WindowFromPoint(navCenter);
+                string who = atPoint == _navHwnd ? "NAV" : atPoint == _childHwnd ? "CHILD" : $"0x{atPoint.ToInt64():X}";
                 CtrlDiag($"  postShow navVisibleWin={IsWindowVisible(_navHwnd)} childVisibleWin={IsWindowVisible(_childHwnd)} " +
                          $"navRect=({nr.Left},{nr.Top},{nr.Right},{nr.Bottom}) childRect=({cl},{ct},{cr},{cb}) " +
-                         $"navOwner=0x{GetParent(_navHwnd).ToInt64():X}");
+                         $"navOwner=0x{GetParent(_navHwnd).ToInt64():X} topAtNavCenter={who}");
             }
             else if (!navVisible)
             {
