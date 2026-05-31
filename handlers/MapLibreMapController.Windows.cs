@@ -1107,6 +1107,7 @@ public class MapLibreMapController : IMapLibreMapController
     private static int _ctrlCounter;
     private readonly int _ctrlId = System.Threading.Interlocked.Increment(ref _ctrlCounter);
     private bool _diagLastNavVisible;
+    private bool _diagDumpNav = true;
     private void CtrlDiag(string msg)
     {
         try { System.IO.File.AppendAllText(_ctrlDiagPath, $"{DateTime.Now:HH:mm:ss.fff} [ctrl#{_ctrlId} child=0x{_childHwnd.ToInt64():X} nav=0x{_navHwnd.ToInt64():X}] {msg}\r\n"); }
@@ -1130,6 +1131,20 @@ public class MapLibreMapController : IMapLibreMapController
                 (IntPtr)(navVisible ? (style | WS_VISIBLE) : (style & ~WS_VISIBLE)));
             SetWindowPos(_navHwnd, IntPtr.Zero, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW_OR_HIDE(navVisible));
+            if (navVisible && _diagDumpNav)
+            {
+                _diagDumpNav = false;
+                GetWindowRect(_navHwnd, out var nr);
+                int cl = -1, ct = -1, cr = -1, cb = -1;
+                if (_childHwnd != IntPtr.Zero) { GetWindowRect(_childHwnd, out var cwr); cl = cwr.Left; ct = cwr.Top; cr = cwr.Right; cb = cwr.Bottom; }
+                CtrlDiag($"  postShow navVisibleWin={IsWindowVisible(_navHwnd)} childVisibleWin={IsWindowVisible(_childHwnd)} " +
+                         $"navRect=({nr.Left},{nr.Top},{nr.Right},{nr.Bottom}) childRect=({cl},{ct},{cr},{cb}) " +
+                         $"navOwner=0x{GetParent(_navHwnd).ToInt64():X}");
+            }
+            else if (!navVisible)
+            {
+                _diagDumpNav = true; // re-arm so the next show is dumped again
+            }
         }
         if (_attrHwnd != IntPtr.Zero)
         {
