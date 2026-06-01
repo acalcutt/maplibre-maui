@@ -411,6 +411,7 @@ public class MlnMapHost : HwndHost
     private Border?          _attributionBorder;
     private Point?           _attributionDesired;
     private Popup?           _attrButtonPopup;    // collapsed ⓘ button
+    private Border?          _attrButtonBorder;   // root Border of the ⓘ button (for height measurement)
     private DispatcherTimer? _attrCollapseTimer;
     private bool             _attrLoaded;         // true once attribution content has been fetched
 
@@ -490,6 +491,13 @@ public class MlnMapHost : HwndHost
                 UpdateNavPopupOpen();
                 UpdateAttributionPopupOpen();
                 if (_attrLoaded) CollapseAttribution();  // show ⓘ button after re-focus
+            };
+            parentWin.StateChanged += (_, _) =>
+            {
+                // Window restored from minimize: WPF SizeChanged doesn't fire when the
+                // restored size is unchanged, so the GL surface won't repaint on its own.
+                if (parentWin.WindowState != WindowState.Minimized)
+                    _renderNeedsUpdate = true;
             };
             parentWin.LocationChanged += (_, _) => 
             { 
@@ -936,19 +944,24 @@ public class MlnMapHost : HwndHost
             Child         = _attributionText,
         };
 
+        // AllowsTransparency=false so the popup uses a normal (non-layered) HWND.
+        // Layered windows have a known WPF rendering defect where Hyperlink/Run inlines
+        // inside TextBlock fail to paint, leaving the popup visually blank.
+        _attributionBorder.Background = Brushes.White;
         _attributionPopup = new Popup
         {
-            AllowsTransparency = true,
+            AllowsTransparency = false,
             StaysOpen          = true,
             IsHitTestVisible   = true,
             PlacementTarget    = this,
             Placement          = PlacementMode.Relative,
             Child              = _attributionBorder,
         };
+        _attributionBorder.SizeChanged += (_, _) => PositionAttributionPopup();
 
         // ── Collapsed ⓘ button ───────────────────────────────────────────────
         var btnText   = new TextBlock { Text = "\u24d8", FontSize = 12, Foreground = Brushes.Black };
-        var btnBorder = new Border
+        _attrButtonBorder = new Border
         {
             Background   = new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)),
             CornerRadius = new CornerRadius(2),
@@ -956,7 +969,8 @@ public class MlnMapHost : HwndHost
             Cursor       = Cursors.Hand,
             Child        = btnText,
         };
-        btnBorder.MouseLeftButtonUp += (_, _) => ExpandAttribution();
+        _attrButtonBorder.MouseLeftButtonUp += (_, _) => ExpandAttribution();
+        _attrButtonBorder.SizeChanged       += (_, _) => PositionAttributionPopup();
         _attrButtonPopup = new Popup
         {
             AllowsTransparency = true,
@@ -964,7 +978,7 @@ public class MlnMapHost : HwndHost
             IsHitTestVisible   = true,
             PlacementTarget    = this,
             Placement          = PlacementMode.Relative,
-            Child              = btnBorder,
+            Child              = _attrButtonBorder,
         };
 
         _attrCollapseTimer       = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -1115,41 +1129,40 @@ public class MlnMapHost : HwndHost
     private void PositionAttributionPopup()
     {
         if (_attributionPopup == null || !_initialized) return;
-        
+
+        const double margin = 4;
+
         // Constrain attribution width to map width minus margins
         if (_attributionText != null)
-        {
             _attributionText.MaxWidth = Math.Max(100, ActualWidth - 8);
-        }
-        
-        // Start at bottom-left corner with small margin
-        double leftMargin = 4;
-        double bottomMargin = 22;
-        
-        // Measure the actual rendered size of the attribution
+
+        // Determine left offset, shifting left if the popup would overflow the right edge.
+        double leftMargin = margin;
         if (_attributionBorder != null)
         {
-            _attributionBorder.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            var popupWidth = _attributionBorder.DesiredSize.Width;
-            
-            // If popup would extend beyond right edge, adjust horizontal offset
+            double popupWidth = _attributionBorder.ActualWidth > 0
+                ? _attributionBorder.ActualWidth
+                : _attributionBorder.DesiredSize.Width;
             if (leftMargin + popupWidth > ActualWidth)
-            {
-                // Align to right edge with margin instead
-                leftMargin = Math.Max(4, ActualWidth - popupWidth - 4);
-            }
+                leftMargin = Math.Max(margin, ActualWidth - popupWidth - margin);
         }
-        
-        // With PlacementMode.Relative, offsets are in logical pixels relative to the
-        // PlacementTarget (this HwndHost). Place attribution at bottom with constraint.
-        _attributionPopup.HorizontalOffset = leftMargin;
-        _attributionPopup.VerticalOffset   = ActualHeight - bottomMargin;
 
-        // Position the collapsed ⓘ button at the same corner
+        // Position each popup so its BOTTOM is margin px above the map's bottom edge.
+        // VerticalOffset (PlacementMode.Relative) sets the popup's TOP — so we subtract
+        // the popup's own height to make the bottom land at ActualHeight - margin.
+        double attrH = _attributionBorder?.ActualHeight > 0
+            ? _attributionBorder.ActualHeight
+            : (_attributionBorder?.DesiredSize.Height > 0 ? _attributionBorder.DesiredSize.Height : 22);
+        _attributionPopup.HorizontalOffset = leftMargin;
+        _attributionPopup.VerticalOffset   = ActualHeight - attrH - margin;
+
         if (_attrButtonPopup != null)
         {
+            double btnH = _attrButtonBorder?.ActualHeight > 0
+                ? _attrButtonBorder.ActualHeight
+                : (_attrButtonBorder?.DesiredSize.Height > 0 ? _attrButtonBorder.DesiredSize.Height : 22);
             _attrButtonPopup.HorizontalOffset = leftMargin;
-            _attrButtonPopup.VerticalOffset   = ActualHeight - bottomMargin;
+            _attrButtonPopup.VerticalOffset   = ActualHeight - btnH - margin;
         }
     }
 
