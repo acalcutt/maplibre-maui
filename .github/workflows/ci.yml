@@ -214,7 +214,7 @@ jobs:
   # ── Sample app builds (validate end-to-end compilation) ───────────────────
   sample:
     name: Sample — all platforms
-    runs-on: macos-latest
+    runs-on: macos-26
     needs: [version, pack]
 
     steps:
@@ -237,11 +237,6 @@ jobs:
         run: dotnet nuget add source $(pwd)/local-feed --name local-ci
 
       - name: Restore workloads
-        # Restore fetches the latest manifests (including MAUI 9.0.120) so NuGet
-        # version resolution matches the packed Handlers NuGet.  iOS/macCatalyst
-        # BUILD steps are omitted below because Microsoft.iOS.Sdk 26.5.x (installed
-        # here) requires Xcode 26.5, but macos-latest ships Xcode 16.4.  Merely
-        # having the 26.5 manifests installed does not affect Android or Windows builds.
         run: dotnet workload restore sample/MauiSample.csproj
 
       - name: Build sample (Android)
@@ -259,42 +254,40 @@ jobs:
           path: sample/bin/Release/net9.0-android/*Signed.apk
           retention-days: 7
 
-      # iOS/macCatalyst builds require Xcode 26.5 (Microsoft.iOS.Sdk 26.5.x) which
-      # is not available on macos-latest (Xcode 16.4).  They are validated by the
-      # pack job (TFM restore) and native-apple.yml (native library compilation).
-      # Re-enable once GitHub Actions ships a macOS image with Xcode 26.5.
+      - name: Select Xcode 26.5
+        run: sudo xcode-select -s /Applications/Xcode_26.5.app
 
-      # - name: Build sample (iOS simulator)
-      #   run: |
-      #     dotnet build sample/MauiSample.csproj \
-      #       -f net9.0-ios \
-      #       -r iossimulator-x64 \
-      #       -c Release \
-      #       -p:EnableWindowsTargeting=true \
-      #       -p:UseLocalPackages=true
+      - name: Build sample (iOS simulator)
+        run: |
+          dotnet build sample/MauiSample.csproj \
+            -f net9.0-ios \
+            -r iossimulator-arm64 \
+            -c Release \
+            -p:EnableWindowsTargeting=true \
+            -p:UseLocalPackages=true
 
-      # - name: Upload iOS simulator app
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: sample-ios-simulator
-      #     path: sample/bin/Release/net9.0-ios/iossimulator-x64/**/*.app
-      #     retention-days: 7
+      - name: Upload iOS simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-ios-simulator
+          path: sample/bin/Release/net9.0-ios/iossimulator-arm64/**/*.app
+          retention-days: 7
 
-      # - name: Build sample (macCatalyst)
-      #   run: |
-      #     dotnet build sample/MauiSample.csproj \
-      #       -f net9.0-maccatalyst \
-      #       -c Release \
-      #       -p:EnableCodeSigning=false \
-      #       -p:EnableWindowsTargeting=true \
-      #       -p:UseLocalPackages=true
+      - name: Build sample (macCatalyst)
+        run: |
+          dotnet build sample/MauiSample.csproj \
+            -f net9.0-maccatalyst \
+            -c Release \
+            -p:EnableCodeSigning=false \
+            -p:EnableWindowsTargeting=true \
+            -p:UseLocalPackages=true
 
-      # - name: Upload macCatalyst app
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: sample-maccatalyst
-      #     path: sample/bin/Release/net9.0-maccatalyst/**/*.app
-      #     retention-days: 7
+      - name: Upload macCatalyst app
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-maccatalyst
+          path: sample/bin/Release/net9.0-maccatalyst/**/*.app
+          retention-days: 7
 
   # ── Sample app build — Windows (separate job, needs a Windows runner) ──────
   sample-windows:

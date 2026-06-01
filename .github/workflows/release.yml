@@ -268,10 +268,10 @@ jobs:
           path: samples/*.zip
           retention-days: 7
 
-  # ── Android + macCatalyst sample builds ─────────────────────────────────
+  # ── Android + iOS + macCatalyst sample builds ───────────────────────────
   samples-mobile:
     name: Build mobile + macCatalyst samples
-    runs-on: macos-latest
+    runs-on: macos-26
     needs: [version-check, pack]
     if: needs.version-check.outputs.published == 'false'
 
@@ -312,40 +312,38 @@ jobs:
           path: sample/bin/Release/net9.0-android/*Signed.apk
           retention-days: 7
 
-      # iOS/macCatalyst builds require Xcode 26.5 (Microsoft.iOS.Sdk 26.5.x) which
-      # is not available on macos-latest (Xcode 16.4).  They are validated by the
-      # pack job (TFM restore) and native-apple.yml (native library compilation).
-      # Re-enable once GitHub Actions ships a macOS image with Xcode 26.5.
+      - name: Select Xcode 26.5
+        run: sudo xcode-select -s /Applications/Xcode_26.5.app
 
-      # - name: Build MauiSample (iOS simulator)
-      #   run: |
-      #     dotnet build sample/MauiSample.csproj \
-      #       -f net9.0-ios \
-      #       -r iossimulator-x64 \
-      #       -c Release \
-      #       -p:UseLocalPackages=true
+      - name: Build MauiSample (iOS simulator)
+        run: |
+          dotnet build sample/MauiSample.csproj \
+            -f net9.0-ios \
+            -r iossimulator-arm64 \
+            -c Release \
+            -p:UseLocalPackages=true
 
-      # - name: Upload iOS simulator app
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: sample-ios-simulator
-      #     path: sample/bin/Release/net9.0-ios/iossimulator-x64/**/*.app
-      #     retention-days: 7
+      - name: Upload iOS simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-ios-simulator
+          path: sample/bin/Release/net9.0-ios/iossimulator-arm64/**/*.app
+          retention-days: 7
 
-      # - name: Build MauiSample (macCatalyst)
-      #   run: |
-      #     dotnet build sample/MauiSample.csproj \
-      #       -f net9.0-maccatalyst \
-      #       -c Release \
-      #       -p:EnableCodeSigning=false \
-      #       -p:UseLocalPackages=true
+      - name: Build MauiSample (macCatalyst)
+        run: |
+          dotnet build sample/MauiSample.csproj \
+            -f net9.0-maccatalyst \
+            -c Release \
+            -p:EnableCodeSigning=false \
+            -p:UseLocalPackages=true
 
-      # - name: Upload macCatalyst app
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: sample-maccatalyst
-      #     path: sample/bin/Release/net9.0-maccatalyst/**/*.app
-      #     retention-days: 7
+      - name: Upload macCatalyst app
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-maccatalyst
+          path: sample/bin/Release/net9.0-maccatalyst/**/*.app
+          retention-days: 7
 
   # ── Vulkan NuGet packaging ────────────────────────────────────────────────
   pack-vulkan:
@@ -446,11 +444,31 @@ jobs:
           name: windows-samples
           path: artifacts/
 
-      - name: Download mobile samples
+      - name: Download mobile samples (Android APK)
         uses: actions/download-artifact@v4
         with:
           name: mobile-samples
           path: artifacts/
+
+      - name: Download iOS simulator app
+        uses: actions/download-artifact@v4
+        with:
+          name: sample-ios-simulator
+          path: artifacts/ios-simulator/
+
+      - name: Download macCatalyst app
+        uses: actions/download-artifact@v4
+        with:
+          name: sample-maccatalyst
+          path: artifacts/maccatalyst/
+
+      - name: Zip iOS simulator and macCatalyst apps
+        run: |
+          for app in artifacts/ios-simulator/**/*.app artifacts/maccatalyst/**/*.app; do
+            [ -d "$app" ] || continue
+            name=$(basename "$app" .app)
+            zip -r "artifacts/${name}.zip" "$app"
+          done
 
       - name: Extract changelog for version
         run: |
