@@ -69,11 +69,13 @@ jobs:
           CABI=$(find build -name "libmln-cabi.a" | head -1)
           echo "Target archive: $CABI"
 
-          # Derive the config-directory name (e.g. "Release-iphoneos")
-          CONFIG_DIR=$(basename "$(dirname "$CABI")")
-          echo "Config directory: $CONFIG_DIR"
-
-          ALL_LIBS=$(find build -name "*.a" -path "*/${CONFIG_DIR}/*" | sort)
+          # Collect ALL .a files anywhere in the build tree.  Each matrix job
+          # configures cmake for a single sysroot (iphoneos, iphonesimulator,
+          # or maccatalyst), so every archive here targets the same platform.
+          # Using a flat search rather than a config-dir pattern avoids missing
+          # sub-project libraries (e.g. maplibre-native) whose cmake output
+          # directory may differ from the top-level project's config dir.
+          ALL_LIBS=$(find build -name "*.a" -type f | sort)
           echo "Libraries to merge:"
           echo "$ALL_LIBS"
 

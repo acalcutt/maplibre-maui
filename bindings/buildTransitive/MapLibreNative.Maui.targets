@@ -18,6 +18,18 @@
     <NativeReference Include="$(MSBuildThisFileDirectory)native/ios/libmln-cabi.xcframework">
       <Kind>Static</Kind>
       <ForceLoad>True</ForceLoad>
+      <!--
+        Apple system frameworks used by MapLibre native (Metal renderer).
+        Listed here so the .NET iOS linker includes them even when mln-cabi
+        is consumed transitively through MapLibreNative.Maui.Handlers.
+      -->
+      <Frameworks>Metal MetalKit QuartzCore CoreGraphics Foundation UIKit</Frameworks>
+      <!--
+        MapLibre uses the system SQLite dylib (libsqlite3.tbd) on iOS — it is
+        never compiled into a static archive, so it must be linked explicitly.
+        libz and libc++ are also pulled in transitively by mbgl-core.
+      -->
+      <LinkerFlags>-lsqlite3 -lz -lc++</LinkerFlags>
     </NativeReference>
   </ItemGroup>
 
@@ -25,6 +37,8 @@
     <NativeReference Include="$(MSBuildThisFileDirectory)native/maccatalyst/libmln-cabi.a">
       <Kind>Static</Kind>
       <ForceLoad>True</ForceLoad>
+      <Frameworks>Metal MetalKit QuartzCore CoreGraphics Foundation</Frameworks>
+      <LinkerFlags>-lsqlite3 -lz -lc++</LinkerFlags>
     </NativeReference>
   </ItemGroup>
 </Project>

@@ -92,6 +92,11 @@ elseif(APPLE)
     find_library(METALKIT_LIB MetalKit REQUIRED)
     find_library(QUARTZCORE_LIB QuartzCore REQUIRED)
     target_link_libraries(mln-cabi PRIVATE ${METAL_LIB} ${METALKIT_LIB} ${QUARTZCORE_LIB})
+    # mbgl-core is compiled with -fno-rtti on Apple (same as Android/Linux).
+    # We must match that flag so MetalBackend's typeinfo does not emit a
+    # reference to the non-existent base class typeinfo
+    # (typeinfo for mbgl::mtl::RendererBackend) that mbgl-core never defines.
+    target_compile_options(mln-cabi PRIVATE -fno-rtti)
 else()
     message(FATAL_ERROR "Unsupported platform")
 endif()
