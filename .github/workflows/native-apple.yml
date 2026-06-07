@@ -56,6 +56,32 @@ jobs:
       - name: Build mln-cabi
         run: cmake --build build --target mln-cabi --config Release
 
+      - name: Merge into self-contained archive
+        run: |
+          # libmln-cabi.a is a thin C wrapper whose PRIVATE cmake link deps
+          # (mbgl-core, metal-cpp symbols, vendor libs) are NOT merged into
+          # it by the static archiver.  The Xcode generator puts every library
+          # for the same configuration into identically-named subdirectories
+          # (e.g. Release-iphoneos, Release-iphonesimulator, Release-maccatalyst).
+          # Collect all of them and merge with libtool so the resulting archive
+          # is self-contained and can be distributed as an XCFramework slice.
+
+          CABI=$(find build -name "libmln-cabi.a" | head -1)
+          echo "Target archive: $CABI"
+
+          # Derive the config-directory name (e.g. "Release-iphoneos")
+          CONFIG_DIR=$(basename "$(dirname "$CABI")")
+          echo "Config directory: $CONFIG_DIR"
+
+          ALL_LIBS=$(find build -name "*.a" -path "*/${CONFIG_DIR}/*" | sort)
+          echo "Libraries to merge:"
+          echo "$ALL_LIBS"
+
+          # shellcheck disable=SC2086
+          libtool -static -o "${CABI}.merged" ${ALL_LIBS}
+          mv "${CABI}.merged" "$CABI"
+          echo "Merged object count: $(ar -t "$CABI" | wc -l)"
+
       - name: Locate built library
         id: find-lib
         run: |
