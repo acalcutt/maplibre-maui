@@ -32,7 +32,7 @@ jobs:
             cmake-system: Darwin
             cmake-sysroot: macosx
             cmake-archs: "x86_64;arm64"
-            extra-flags: -DCMAKE_XCODE_ATTRIBUTE_SUPPORTS_MACCATALYST=YES -DMLN_WITH_GLFW=OFF
+            extra-flags: -DCMAKE_XCODE_ATTRIBUTE_SUPPORTS_MACCATALYST=YES -DCMAKE_XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET=15.0 -DMLN_WITH_GLFW=OFF
             artifact: native-maccatalyst
 
     steps:
