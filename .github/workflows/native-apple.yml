@@ -91,15 +91,29 @@ jobs:
           mkdir -p out
           for ARCH in x86_64 arm64; do
             BUILD_DIR=build-${ARCH}
+            TRIPLE="${ARCH}-apple-ios15.0-macabi"
+            # -target must be on BOTH the compile and link lines: Xcode adds
+            # its own `-target <arch>-apple-macos<dep>` to each invocation;
+            # clang uses the LAST -target, so we append ours via CMAKE_*_FLAGS
+            # (compile) and CMAKE_*_LINKER_FLAGS (link). Without the linker
+            # flag, the compiler-check try_compile fails to link with
+            # "building for 'macOS', but linking in object file built for 'macCatalyst'".
+            #
+            # MACOSX_DEPLOYMENT_TARGET stays within the SDK's supported range
+            # (Xcode 15.4 ships MacOSX14.5 SDK -> max 14.x); the actual
+            # macCatalyst minimum (iOS 15) comes from the -target triple.
             cmake -B "$BUILD_DIR" -G Xcode \
               -DCMAKE_SYSTEM_NAME=Darwin \
               -DCMAKE_OSX_SYSROOT=macosx \
               -DCMAKE_OSX_ARCHITECTURES="${ARCH}" \
-              -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
-              -DCMAKE_C_FLAGS="-target ${ARCH}-apple-ios15.0-macabi" \
-              -DCMAKE_CXX_FLAGS="-target ${ARCH}-apple-ios15.0-macabi" \
-              -DCMAKE_OBJC_FLAGS="-target ${ARCH}-apple-ios15.0-macabi" \
-              -DCMAKE_OBJCXX_FLAGS="-target ${ARCH}-apple-ios15.0-macabi" \
+              -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+              -DCMAKE_C_FLAGS="-target ${TRIPLE}" \
+              -DCMAKE_CXX_FLAGS="-target ${TRIPLE}" \
+              -DCMAKE_OBJC_FLAGS="-target ${TRIPLE}" \
+              -DCMAKE_OBJCXX_FLAGS="-target ${TRIPLE}" \
+              -DCMAKE_EXE_LINKER_FLAGS="-target ${TRIPLE}" \
+              -DCMAKE_SHARED_LINKER_FLAGS="-target ${TRIPLE}" \
+              -DCMAKE_MODULE_LINKER_FLAGS="-target ${TRIPLE}" \
               -DCMAKE_XCODE_ATTRIBUTE_SUPPORTS_MACCATALYST=YES \
               -DMLN_WITH_METAL=ON \
               -DMLN_WITH_GLFW=OFF
