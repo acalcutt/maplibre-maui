@@ -136,6 +136,9 @@ jobs:
               -DCMAKE_SHARED_LINKER_FLAGS="-target ${TRIPLE}" \
               -DCMAKE_MODULE_LINKER_FLAGS="-target ${TRIPLE}" \
               -DCMAKE_XCODE_ATTRIBUTE_SUPPORTS_MACCATALYST=YES \
+              -DCMAKE_XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET=15.0 \
+              -DCMAKE_XCODE_ATTRIBUTE_FRAMEWORK_SEARCH_PATHS='$(SDKROOT)/System/iOSSupport/System/Library/Frameworks $(inherited)' \
+              -DCMAKE_XCODE_ATTRIBUTE_SYSTEM_FRAMEWORK_SEARCH_PATHS='$(SDKROOT)/System/iOSSupport/System/Library/Frameworks $(inherited)' \
               -DMLN_WITH_METAL=ON \
               -DMLN_WITH_GLFW=OFF
             cmake --build "$BUILD_DIR" --target mln-cabi --config Release
