@@ -29,10 +29,10 @@ jobs:
             artifact: native-iossimulator-arm64
 
           - name: macCatalyst arm64+x64
-            cmake-system: Darwin
+            cmake-system: iOS
             cmake-sysroot: macosx
             cmake-archs: "x86_64;arm64"
-            extra-flags: -DCMAKE_XCODE_ATTRIBUTE_SUPPORTS_MACCATALYST=YES -DMLN_WITH_GLFW=OFF
+            extra-flags: -DCMAKE_XCODE_ATTRIBUTE_SUPPORTS_MACCATALYST=YES -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 -DMLN_WITH_GLFW=OFF
             artifact: native-maccatalyst
 
     steps:
@@ -43,8 +43,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Configure CMake (iOS / iOS Simulator)
-        if: ${{ matrix.artifact != 'native-maccatalyst' }}
+      - name: Configure CMake
         run: |
           cmake -B build -G Xcode \
             -DCMAKE_SYSTEM_NAME=${{ matrix.cmake-system }} \
@@ -54,121 +53,27 @@ jobs:
             ${{ matrix.extra-flags }} \
             -DMLN_WITH_METAL=ON
 
-      - name: Build mln-cabi (iOS / iOS Simulator)
-        if: ${{ matrix.artifact != 'native-maccatalyst' }}
+      - name: Build mln-cabi
         run: cmake --build build --target mln-cabi --config Release
 
-      - name: Merge into self-contained archive (iOS / iOS Simulator)
-        if: ${{ matrix.artifact != 'native-maccatalyst' }}
+      - name: Merge into self-contained archive
         run: |
           # libmln-cabi.a is a thin C wrapper whose PRIVATE cmake link deps
           # (mbgl-core, metal-cpp symbols, vendor libs) are NOT merged into
-          # it by the static archiver. Collect every .a in the build tree and
-          # merge with libtool so the result is self-contained.
+          # it by the static archiver.  The Xcode generator puts every library
+          # for the same configuration into identically-named subdirectories
+          # (e.g. Release-iphoneos, Release-iphonesimulator, Release-maccatalyst).
+          # Collect all of them and merge with libtool so the resulting archive
+          # is self-contained and can be distributed as an XCFramework slice.
           CABI=$(find build -name "libmln-cabi.a" | head -1)
-          ALL_LIBS=$(find build -name "*.a" -type f | sort)
           echo "Target archive: $CABI"
+          ALL_LIBS=$(find build -name "*.a" -type f | sort)
           echo "Libraries to merge:"
           echo "$ALL_LIBS"
           # shellcheck disable=SC2086
           libtool -static -o "${CABI}.merged" ${ALL_LIBS}
           mv "${CABI}.merged" "$CABI"
           echo "Merged object count: $(ar -t "$CABI" | wc -l)"
-
-      - name: Build mln-cabi (macCatalyst, per-arch + lipo)
-        # CMake + Xcode generator with CMAKE_SYSTEM_NAME=Darwin produces plain
-        # macOS-tagged objects even with SUPPORTS_MACCATALYST=YES, because
-        # vendor sub-project targets don't inherit that attribute and
-        # `cmake --build` invokes xcodebuild with the default macOS destination.
-        # vtool can't retag a static archive (it's not a Mach-O), so instead
-        # we pass `-target <arch>-apple-ios15.0-macabi` to clang so every
-        # object is emitted with the correct macCatalyst load command up front.
-        # Because -target bakes the arch in, we build each slice separately
-        # and lipo them at the end.
-        if: ${{ matrix.artifact == 'native-maccatalyst' }}
-        run: |
-          set -euo pipefail
-
-          # mln-cabi does not consume any .swift sources, but maplibre-native's
-          # platform/darwin/darwin.cmake unconditionally calls
-          # `enable_language(OBJC OBJCXX Swift)`, which forces CMake to run a
-          # Swift compiler check try_compile. That try_compile goes through
-          # Xcode's builtin-Swift-Compilation step, which derives its own
-          # `-target <arch>-apple-macos<dep>` from MACOSX_DEPLOYMENT_TARGET and
-          # ignores CMAKE_Swift_FLAGS / OTHER_SWIFT_FLAGS we try to inject, so
-          # the Swift .o ends up macOS-tagged while the link expects
-          # macCatalyst -> "ld: building for 'macCatalyst', but linking in
-          # object file built for 'macOS'". The only Swift sources in the
-          # subtree are tests (MLNDocumentationExampleTests.swift etc.) which
-          # are not in mln-cabi's dependency graph, so dropping Swift from the
-          # enable_language() call for this job is safe and avoids the issue.
-          DCMAKE=dependencies/maplibre-native/platform/darwin/darwin.cmake
-          sed -i.bak \
-            's/enable_language(OBJC OBJCXX Swift)/enable_language(OBJC OBJCXX)/' \
-            "$DCMAKE"
-          # ios.cmake (only included for CMAKE_SYSTEM_NAME=iOS) links
-          # mbgl-vendor-filesystem to mbgl-core, which provides the
-          # vendor/filesystem/include path needed by action_journal_impl.cpp
-          # (<ghc/filesystem.hpp>). Darwin builds omit ios.cmake, so add it here.
-          echo 'target_link_libraries(mbgl-core PRIVATE mbgl-vendor-filesystem)' >> "$DCMAKE"
-          echo "Patched darwin.cmake:"
-          grep -E "enable_language|mbgl-vendor-filesystem" "$DCMAKE"
-
-          mkdir -p out
-          for ARCH in x86_64 arm64; do
-            BUILD_DIR=build-${ARCH}
-            TRIPLE="${ARCH}-apple-ios15.0-macabi"
-            # -target must be on the compile AND link lines: Xcode adds its own
-            # `-target <arch>-apple-macos<dep>` to each invocation; clang uses
-            # the LAST -target, so we append ours via CMAKE_<LANG>_FLAGS
-            # (compile) and CMAKE_*_LINKER_FLAGS (link). Without the linker
-            # flag the cxx try_compile fails with "building for 'macOS', but
-            # linking in object file built for 'macCatalyst'".
-            #
-            # MACOSX_DEPLOYMENT_TARGET stays within the SDK's supported range
-            # (Xcode 15.4 ships MacOSX14.5 SDK -> max 14.x); the actual
-            # macCatalyst minimum (iOS 15) comes from the -target triple.
-            cmake -B "$BUILD_DIR" -G Xcode \
-              -DCMAKE_SYSTEM_NAME=Darwin \
-              -DCMAKE_OSX_SYSROOT=macosx \
-              -DCMAKE_OSX_ARCHITECTURES="${ARCH}" \
-              -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
-              -DCMAKE_C_FLAGS="-target ${TRIPLE}" \
-              -DCMAKE_CXX_FLAGS="-target ${TRIPLE}" \
-              -DCMAKE_OBJC_FLAGS="-target ${TRIPLE}" \
-              -DCMAKE_OBJCXX_FLAGS="-target ${TRIPLE}" \
-              -DCMAKE_EXE_LINKER_FLAGS="-target ${TRIPLE}" \
-              -DCMAKE_SHARED_LINKER_FLAGS="-target ${TRIPLE}" \
-              -DCMAKE_MODULE_LINKER_FLAGS="-target ${TRIPLE}" \
-              -DCMAKE_XCODE_ATTRIBUTE_SUPPORTS_MACCATALYST=YES \
-              -DMLN_WITH_METAL=ON \
-              -DMLN_WITH_GLFW=OFF
-            cmake --build "$BUILD_DIR" --target mln-cabi --config Release
-            CABI=$(find "$BUILD_DIR" -name "libmln-cabi.a" | head -1)
-            ALL_LIBS=$(find "$BUILD_DIR" -name "*.a" -type f | sort)
-            echo "[$ARCH] merging:"
-            echo "$ALL_LIBS"
-            # shellcheck disable=SC2086
-            libtool -static -o "${CABI}.merged" ${ALL_LIBS}
-            mv "${CABI}.merged" "$CABI"
-            cp "$CABI" "out/libmln-cabi-${ARCH}.a"
-          done
-
-          mkdir -p build/native/Release
-          lipo -create out/libmln-cabi-x86_64.a out/libmln-cabi-arm64.a \
-            -output build/native/Release/libmln-cabi.a
-          echo "Universal macCatalyst archive:"
-          lipo -info build/native/Release/libmln-cabi.a
-
-          # Sanity-check: extract the first .o and confirm the platform tag
-          # is MACCATALYST (6), not MACOS (1).
-          TMP=$(mktemp -d)
-          ( cd "$TMP" && ar -x "$GITHUB_WORKSPACE/build/native/Release/libmln-cabi.a" ) || true
-          FIRST_OBJ=$(find "$TMP" -name "*.o" | head -1)
-          if [ -n "$FIRST_OBJ" ]; then
-            echo "First object build tags:"
-            xcrun vtool -show-build "$FIRST_OBJ" || true
-          fi
 
       - name: Locate built library
         id: find-lib
