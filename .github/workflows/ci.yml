@@ -250,7 +250,29 @@ jobs:
           path: local-feed
 
       - name: Add local NuGet feed
-        run: dotnet nuget add source $(pwd)/local-feed --name local-ci
+        run: |
+          dotnet nuget add source $(pwd)/local-feed --name local-ci
+          # Force MapLibreNative packages to resolve from the local CI build
+          # rather than the published nuget.org version (which may have
+          # differently-tagged native binaries). Package source mapping
+          # overrides the global cache if provenance doesn't match local-ci.
+          cat > sample/NuGet.Config <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSourceMapping>
+              <packageSource key="local-ci">
+                <package pattern="MapLibreNative.*" />
+                <package pattern="Maui.Maplibre.*" />
+              </packageSource>
+              <packageSource key="nuget.org">
+                <package pattern="*" />
+              </packageSource>
+            </packageSourceMapping>
+          </configuration>
+          EOF
+          # Also evict any stale cached copies so NuGet re-fetches from local-ci
+          rm -rf ~/.nuget/packages/maplibrenative.maui \
+                 ~/.nuget/packages/maplibrenative.maui.handlers
 
       - name: Restore workloads
         run: dotnet workload restore sample/MauiSample.csproj
