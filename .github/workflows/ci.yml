@@ -252,6 +252,9 @@ jobs:
       - name: Add local NuGet feed
         run: dotnet nuget add source $(pwd)/local-feed --name local-ci
 
+      - name: Restore workloads
+        run: dotnet workload restore sample/MauiSample.csproj
+
       - name: Restore sample packages from CI feed
         run: |
           # dotnet restore with explicit --source overrides all configured
@@ -259,13 +262,11 @@ jobs:
           # This seeds the global package cache with the CI-built packages
           # (correctly platform-tagged native libs) before dotnet build runs,
           # preventing nuget.org's published version from being used instead.
+          # Must run after workload restore so MAUI workloads are installed.
           dotnet restore sample/MauiSample.csproj \
             -p:UseLocalPackages=true \
             --source $(pwd)/local-feed \
             --source https://api.nuget.org/v3/index.json
-
-      - name: Restore workloads
-        run: dotnet workload restore sample/MauiSample.csproj
 
       - name: Build sample (Android)
         run: |
