@@ -54,7 +54,22 @@ jobs:
             -DMLN_WITH_METAL=ON
 
       - name: Build mln-cabi
-        run: cmake --build build --target mln-cabi --config Release
+        run: |
+          if [ "${{ matrix.artifact }}" = "native-maccatalyst" ]; then
+            # Without an explicit destination xcodebuild defaults to a plain
+            # macOS build and stamps objects with the macOS platform tag rather
+            # than MACCATALYST, which causes "ld: building for 'macCatalyst',
+            # but linking in object file built for 'macOS'" in the MAUI app.
+            # Passing 'variant=Mac Catalyst' makes Xcode set IS_MACCATALYST=YES,
+            # use the macabi target triple, AND automatically prepend the
+            # iOSSupport framework search path — so MetalKit resolves to the
+            # UIKit-based MTKView (UIView subclass) instead of the AppKit-based
+            # macOS MTKView (NSView subclass, unavailable on macCatalyst).
+            cmake --build build --target mln-cabi --config Release \
+              -- -destination "platform=macOS,variant=Mac Catalyst"
+          else
+            cmake --build build --target mln-cabi --config Release
+          fi
 
       - name: Merge into self-contained archive
         run: |
