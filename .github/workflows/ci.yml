@@ -128,7 +128,7 @@ jobs:
           MAJOR=$(echo "$BASE" | cut -d. -f1)
           MINOR=$(echo "$BASE" | cut -d. -f2)
           PATCH=$(echo "$BASE" | cut -d. -f3)
-          CI_VER="${MAJOR}.${MINOR}.$((PATCH+1))-ci.${{ github.run_number }}"
+          CI_VER="${MAJOR}.${MINOR}.$((PATCH+1)).${{ github.run_number }}"
           echo "CI_VER=$CI_VER" >> "$GITHUB_ENV"
           echo "CI package version: $CI_VER"
 
