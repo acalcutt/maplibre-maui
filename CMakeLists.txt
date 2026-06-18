@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15 FATAL_ERROR)
-project(maplibre-maui-ac LANGUAGES CXX C)
+project(maplibre-maui LANGUAGES CXX C)
 
 set(MAPLIBRE_NATIVE_DIR "${CMAKE_CURRENT_LIST_DIR}/dependencies/maplibre-native"
     CACHE PATH "Path to maplibre-native source tree")
