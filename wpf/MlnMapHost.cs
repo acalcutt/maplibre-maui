@@ -702,6 +702,15 @@ public class MlnMapHost : HwndHost
             case "onDidFailLoadingMap":
                 Log($"onDidFailLoadingMap: {detail}");
                 break;
+            case "onDidFinishRenderingFrameNeedsRepaint":
+            case "onDidFinishRenderingFrameNeedsRepaintPlacementChanged":
+                // mbgl still has work to do — keep the render loop running.
+                _renderNeedsUpdate = true;
+                break;
+            case "onDidFinishRenderingFramePlacementChanged":
+                // Symbol placement changed — labels need a repaint.
+                _renderNeedsUpdate = true;
+                break;
         }
     }
 
