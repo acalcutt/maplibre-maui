@@ -290,6 +290,19 @@ public class MapLibreMapController : IMapLibreMapController
     private int             _attrCollapseGen;            // generation counter for auto-collapse timer
     private bool            _attrLoaded;                 // true once attribution content has been fetched
 
+    // -- Gesture state ---------------------------------------------------------
+
+    private GestureDetector      _gestureDetector = null!;
+    private ScaleGestureDetector _scaleDetector   = null!;
+    private bool _scrollGesturesEnabled = true;
+    private bool _zoomGesturesEnabled   = true;
+    private bool _rotateGesturesEnabled = true;
+    private bool _tiltGesturesEnabled   = true;
+    // Two-pointer tracking (rotation + tilt)
+    private float _tpPrevAngle;
+    private float _tpPrevMidY;
+    private bool  _tpActive;
+
     public FrameLayout View { get; private set; } = null!;
 
     // -- Events ----------------------------------------------------------------
@@ -327,6 +340,7 @@ public class MapLibreMapController : IMapLibreMapController
             Destroyed = _ => DisposeNative(),
         };
         _surfaceView.Holder!.AddCallback(_surfaceCb);
+        SetupGestureDetectors();
 
         // Attribution overlay (bottom-right corner, OSM licence compliance)
         _attrView = new TextView(ctx);
@@ -470,11 +484,11 @@ public class MapLibreMapController : IMapLibreMapController
                         minZoom, maxZoom, minPitch, maxPitch);
     }
     public void SetCompassEnabled(bool v)                     { }
-    public void SetRotateGesturesEnabled(bool v)              { }
-    public void SetScrollGesturesEnabled(bool v)              { }
-    public void SetTiltGesturesEnabled(bool v)                { }
+    public void SetRotateGesturesEnabled(bool v)  => _rotateGesturesEnabled = v;
+    public void SetScrollGesturesEnabled(bool v)  => _scrollGesturesEnabled = v;
+    public void SetTiltGesturesEnabled(bool v)    => _tiltGesturesEnabled   = v;
     public void SetTrackCameraPosition(bool v)                { }
-    public void SetZoomGesturesEnabled(bool v)                { }
+    public void SetZoomGesturesEnabled(bool v)    => _zoomGesturesEnabled   = v;
     public void SetMyLocationEnabled(bool v)                  { }
     public void SetMyLocationTrackingMode(int v)              { }
     public void SetMyLocationRenderMode(int v)                { }
@@ -893,6 +907,185 @@ public class MapLibreMapController : IMapLibreMapController
     public bool ShowBearing    { get; set; } = true;
     public void UpdateLocationIndicator(double lat, double lon, float bearing = 0, float accuracyMeters = 10) { }
     public void ClearLocationIndicator() { }
+
+    // -- Gesture detection -----------------------------------------------------
+
+    private void SetupGestureDetectors()
+    {
+        var ctx = Android.App.Application.Context!;
+        var gl  = new MapGestureListener(this);
+        _gestureDetector = new GestureDetector(ctx, gl);
+        _scaleDetector   = new ScaleGestureDetector(ctx, new MapScaleListener(this));
+        _surfaceView.SetOnTouchListener(new MapTouchListener(this));
+    }
+
+    private class MapTouchListener : Java.Lang.Object, View.IOnTouchListener
+    {
+        private readonly MapLibreMapController _ctrl;
+        public MapTouchListener(MapLibreMapController ctrl) => _ctrl = ctrl;
+
+        public bool OnTouch(View? v, MotionEvent? e)
+        {
+            if (e == null) return false;
+
+            // Feed every event to both detectors.
+            _ctrl._gestureDetector.OnTouchEvent(e);
+            _ctrl._scaleDetector.OnTouchEvent(e);
+
+            switch (e.ActionMasked)
+            {
+                case MotionEventActions.Down:
+                    _ctrl._map?.SetGestureInProgress(true);
+                    _ctrl._map?.CancelTransitions();
+                    _ctrl._tpActive = false;
+                    break;
+
+                case MotionEventActions.PointerDown:
+                    if (e.PointerCount == 2 &&
+                        (_ctrl._rotateGesturesEnabled || _ctrl._tiltGesturesEnabled))
+                    {
+                        _ctrl._tpActive    = true;
+                        _ctrl._tpPrevAngle = TwoFingerAngle(e);
+                        _ctrl._tpPrevMidY  = TwoFingerMidY(e);
+                    }
+                    break;
+
+                case MotionEventActions.Move:
+                    if (_ctrl._tpActive && e.PointerCount >= 2)
+                    {
+                        float pr = _ctrl._pixelRatio;
+
+                        if (_ctrl._rotateGesturesEnabled)
+                        {
+                            float newAngle = TwoFingerAngle(e);
+                            float delta    = newAngle - _ctrl._tpPrevAngle;
+                            while (delta >  180f) delta -= 360f;
+                            while (delta < -180f) delta += 360f;
+                            if (System.Math.Abs(delta) > 0.15f)
+                            {
+                                double rad = delta * System.Math.PI / 180.0;
+                                double cx  = _ctrl._surfaceView.Width  / (2.0 * pr);
+                                double cy  = _ctrl._surfaceView.Height / (2.0 * pr);
+                                const double r = 100.0;
+                                _ctrl._map?.RotateBy(
+                                    cx + r, cy,
+                                    cx + r * System.Math.Cos(rad),
+                                    cy + r * System.Math.Sin(rad));
+                                _ctrl._tpPrevAngle = newAngle;
+                            }
+                        }
+
+                        if (_ctrl._tiltGesturesEnabled)
+                        {
+                            float newMidY = TwoFingerMidY(e);
+                            float deltaY  = newMidY - _ctrl._tpPrevMidY;
+                            if (System.Math.Abs(deltaY) > 0.5f)
+                            {
+                                // Fingers moving up (negative deltaY) increases pitch.
+                                _ctrl._map?.PitchBy(-deltaY / _ctrl._pixelRatio * 0.4);
+                                _ctrl._tpPrevMidY = newMidY;
+                            }
+                        }
+                    }
+                    break;
+
+                case MotionEventActions.PointerUp:
+                    if (e.PointerCount <= 2)
+                        _ctrl._tpActive = false;
+                    break;
+
+                case MotionEventActions.Up:
+                    _ctrl._map?.SetGestureInProgress(false);
+                    _ctrl._tpActive = false;
+                    break;
+
+                case MotionEventActions.Cancel:
+                    _ctrl._map?.SetGestureInProgress(false);
+                    _ctrl._tpActive = false;
+                    break;
+            }
+            return true;
+        }
+
+        private static float TwoFingerAngle(MotionEvent e) =>
+            (float)(System.Math.Atan2(e.GetY(1) - e.GetY(0), e.GetX(1) - e.GetX(0))
+                    * 180.0 / System.Math.PI);
+
+        private static float TwoFingerMidY(MotionEvent e) =>
+            (e.GetY(0) + e.GetY(1)) * 0.5f;
+    }
+
+    private class MapGestureListener : GestureDetector.SimpleOnGestureListener
+    {
+        private readonly MapLibreMapController _ctrl;
+        public MapGestureListener(MapLibreMapController ctrl) => _ctrl = ctrl;
+
+        public override bool OnScroll(MotionEvent? e1, MotionEvent? e2,
+                                      float distanceX, float distanceY)
+        {
+            // Suppress single-finger scroll while two pointers are active
+            // (scale/rotate/tilt are handled by MapTouchListener directly).
+            if (!_ctrl._scrollGesturesEnabled || _ctrl._tpActive) return false;
+            float pr = _ctrl._pixelRatio;
+            _ctrl._map?.MoveBy(-distanceX / pr, -distanceY / pr);
+            return true;
+        }
+
+        public override bool OnFling(MotionEvent? e1, MotionEvent? e2,
+                                     float velocityX, float velocityY)
+        {
+            if (!_ctrl._scrollGesturesEnabled) return false;
+            double pr    = _ctrl._pixelRatio;
+            double velXY = System.Math.Sqrt(velocityX * velocityX + velocityY * velocityY) / pr;
+            if (velXY < 200) return false;   // too slow to fling
+            long animTime  = (long)System.Math.Min(velXY / 7.0 + 400, 1500);
+            double offsetX = velocityX * animTime * 0.00028 / pr;
+            double offsetY = velocityY * animTime * 0.00028 / pr;
+            _ctrl._map?.MoveBy(offsetX, offsetY, animTime);
+            return true;
+        }
+
+        public override void OnLongPress(MotionEvent e)
+        {
+            if (_ctrl._tpActive || _ctrl._map == null) return;
+            float pr       = _ctrl._pixelRatio;
+            var (lat, lon) = _ctrl._map.LatLngForPixel(e.GetX() / pr, e.GetY() / pr);
+            _ctrl.OnMapLongClickReceived?.Invoke(new LatLng(lat, lon));
+        }
+
+        public override bool OnSingleTapConfirmed(MotionEvent e)
+        {
+            if (_ctrl._map == null) return false;
+            float pr       = _ctrl._pixelRatio;
+            var (lat, lon) = _ctrl._map.LatLngForPixel(e.GetX() / pr, e.GetY() / pr);
+            _ctrl.OnMapClickReceived?.Invoke(new LatLng(lat, lon));
+            return true;
+        }
+
+        public override bool OnDoubleTap(MotionEvent e)
+        {
+            if (!_ctrl._zoomGesturesEnabled) return false;
+            float pr = _ctrl._pixelRatio;
+            _ctrl._map?.OnDoubleTap(e.GetX() / pr, e.GetY() / pr);
+            return true;
+        }
+    }
+
+    private class MapScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener
+    {
+        private readonly MapLibreMapController _ctrl;
+        public MapScaleListener(MapLibreMapController ctrl) => _ctrl = ctrl;
+
+        public override bool OnScale(ScaleGestureDetector detector)
+        {
+            if (!_ctrl._zoomGesturesEnabled) return false;
+            float pr     = _ctrl._pixelRatio;
+            float focusX = detector.FocusX / pr;
+            float focusY = detector.FocusY / pr;
+            _ctrl._map?.OnPinch(detector.ScaleFactor, focusX, focusY);
+            return true;
+        }
+    }
 
     // -- Cleanup ---------------------------------------------------------------
 
