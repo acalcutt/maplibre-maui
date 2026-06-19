@@ -65,7 +65,8 @@ jobs:
           for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
             Write-Host "CMake configure attempt $attempt of $maxAttempts"
             cmake -B build `
-              -G "Visual Studio 17 2022" -A ${{ matrix.vs-arch }} `
+              -G Ninja `
+              -DCMAKE_BUILD_TYPE=Release `
               -DCMAKE_TOOLCHAIN_FILE="dependencies/maplibre-native/platform/windows/custom-toolchain.cmake" `
               -DMLN_WITH_OPENGL=OFF `
               -DMLN_WITH_EGL=OFF `

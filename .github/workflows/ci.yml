@@ -64,6 +64,8 @@ jobs:
     name: Pack NuGet
     runs-on: macos-latest
     needs: [version, build-windows, build-android, build-apple]
+    outputs:
+      ci_ver: ${{ steps.ci_ver.outputs.ci_ver }}
 
     steps:
       - uses: actions/checkout@v4
@@ -86,39 +88,73 @@ jobs:
           N=bindings/native
           mkdir -p $N/win-x64 $N/win-arm64
           mkdir -p $N/android-arm64 $N/android-x64
-          mkdir -p $N/ios-arm64 $N/maccatalyst
+          mkdir -p $N/ios-arm64 $N/iossimulator-arm64 $N/maccatalyst
 
             find native-artifacts/native-windows-x64 -name "mln-cabi.dll" -exec cp {} $N/win-x64/ \;
             find native-artifacts/native-windows-arm64 -name "mln-cabi.dll" -exec cp {} $N/win-arm64/ \;
             find native-artifacts/native-android-arm64-v8a -name "libmln-cabi.so" -exec cp {} $N/android-arm64/ \;
             find native-artifacts/native-android-x86_64 -name "libmln-cabi.so" -exec cp {} $N/android-x64/ \;
             find native-artifacts/native-ios-arm64 -name "libmln-cabi.a" -exec cp {} $N/ios-arm64/ \;
+            find native-artifacts/native-iossimulator-arm64 -name "libmln-cabi.a" -exec cp {} $N/iossimulator-arm64/ \;
             find native-artifacts/native-maccatalyst -name "libmln-cabi.a" -exec cp {} $N/maccatalyst/ \;
 
           echo "Native libs arranged:"
           find $N -type f
+      - name: Create iOS XCFramework
+        run: |
+          N=bindings/native
+          mkdir -p $N/ios
+          XCFW_ARGS=""
+          [ -f $N/ios-arm64/libmln-cabi.a ]         && XCFW_ARGS="$XCFW_ARGS -library $N/ios-arm64/libmln-cabi.a"
+          [ -f $N/iossimulator-arm64/libmln-cabi.a ] && XCFW_ARGS="$XCFW_ARGS -library $N/iossimulator-arm64/libmln-cabi.a"
+          if [ -n "$XCFW_ARGS" ]; then
+            xcodebuild -create-xcframework \
+              $XCFW_ARGS \
+              -output $N/ios/libmln-cabi.xcframework
+            echo "XCFramework created at $N/ios/libmln-cabi.xcframework"
+          else
+            echo "No iOS libraries found; skipping XCFramework creation."
+          fi
       - name: Restore workloads
         run: dotnet workload restore maplibre-maui.sln
+
+      - name: Compute CI package version
+        id: ci_ver
+        run: |
+          # Bump the patch component so the CI version always sorts above the
+          # last published stable release on nuget.org. The sample references
+          # Version="*-*" which picks the highest available version across all
+          # configured sources; using a higher base version (patch+1) rather
+          # than a plain prerelease suffix (which sorts BELOW stable in SemVer)
+          # ensures the local CI feed wins automatically.
+          BASE=${{ needs.version.outputs.version }}
+          MAJOR=$(echo "$BASE" | cut -d. -f1)
+          MINOR=$(echo "$BASE" | cut -d. -f2)
+          PATCH=$(echo "$BASE" | cut -d. -f3)
+          CI_VER="${MAJOR}.${MINOR}.$((PATCH+1)).${{ github.run_number }}"
+          echo "CI_VER=$CI_VER" >> "$GITHUB_ENV"
+          echo "ci_ver=$CI_VER" >> "$GITHUB_OUTPUT"
+          echo "CI package version: $CI_VER"
 
       - name: Pack MapLibreNative.Maui
         run: |
           dotnet pack bindings/MapLibreNative.Maui.csproj \
             -c Release \
-            -p:Version=${{ needs.version.outputs.version }} \
+            -p:Version=${{ env.CI_VER }} \
             -p:_MbglNativeDir=$(pwd)/bindings/native/ \
             -o artifacts/
 
-      - name: Pack Maui.Maplibre.Handlers
+      - name: Pack MapLibreNative.Maui.Handlers
         run: |
           dotnet pack handlers/MapLibreNative.Maui.Handlers.csproj \
             -c Release \
-            -p:Version=${{ needs.version.outputs.version }} \
+            -p:Version=${{ env.CI_VER }} \
             -o artifacts/
 
       - name: Upload NuGet artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nuget-packages-ci
+          name: nuget-packages
           path: artifacts/*.nupkg
           retention-days: 3
 
@@ -151,18 +187,28 @@ jobs:
           echo "Staged DLLs:"
           find bindings/native -name "*.dll"
 
-      - name: Pack Maui.MapLibre.WPF
+      - name: Restore workloads
+        run: dotnet workload install maui
+
+      - name: Pack MapLibreNative.Maui.WPF
         shell: bash
         run: |
           dotnet pack wpf/MapLibreNative.Maui.WPF.csproj \
             -c Release \
-            -p:Version=${{ needs.version.outputs.version }} \
+            -p:Version=${{ needs.pack.outputs.ci_ver }} \
             -o artifacts/
+
+      - name: Upload WPF NuGet artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages-wpf
+          path: artifacts/*.nupkg
+          retention-days: 3
 
       - name: Download NuGet packages (for local feed)
         uses: actions/download-artifact@v4
         with:
-          name: nuget-packages-ci
+          name: nuget-packages
           path: local-feed
 
       - name: Add local NuGet feed
@@ -196,25 +242,51 @@ jobs:
             -c Release -r win-arm64 --self-contained false \
             -o publish/WpfExample-win-arm64
 
+      - name: Publish MauiSample (win-x64)
+        shell: bash
+        run: |
+          dotnet publish sample/MauiSample.csproj \
+            -f net9.0-windows10.0.19041.0 \
+            -c Release -r win-x64 \
+            -p:TargetFrameworks=net9.0-windows10.0.19041.0 \
+            -p:WindowsPackageType=None \
+            -p:UseLocalPackages=true \
+            -o publish/MauiSample-win-x64
+
+      - name: Publish MauiSample (win-arm64)
+        shell: bash
+        run: |
+          dotnet publish sample/MauiSample.csproj \
+            -f net9.0-windows10.0.19041.0 \
+            -c Release -r win-arm64 \
+            -p:TargetFrameworks=net9.0-windows10.0.19041.0 \
+            -p:WindowsPackageType=None \
+            -p:UseLocalPackages=true \
+            -o publish/MauiSample-win-arm64
+
       - name: Zip sample outputs
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path samples -Force | Out-Null
-          @('ConsoleExample-win-x64','ConsoleExample-win-arm64','WpfExample-win-x64','WpfExample-win-arm64') | ForEach-Object {
+          @(
+            'ConsoleExample-win-x64','ConsoleExample-win-arm64',
+            'WpfExample-win-x64','WpfExample-win-arm64',
+            'MauiSample-win-x64','MauiSample-win-arm64'
+          ) | ForEach-Object {
             Compress-Archive -Path "publish/$_/*" -DestinationPath "samples/$_.zip"
           }
 
-      - name: Upload Windows samples (CI)
+      - name: Upload Windows samples
         uses: actions/upload-artifact@v4
         with:
-          name: windows-samples-ci
+          name: windows-samples
           path: samples/*.zip
           retention-days: 7
 
   # ── Sample app builds (validate end-to-end compilation) ───────────────────
   sample:
     name: Sample — all platforms
-    runs-on: macos-latest
+    runs-on: macos-26
     needs: [version, pack]
 
     steps:
@@ -230,18 +302,13 @@ jobs:
       - name: Download NuGet packages
         uses: actions/download-artifact@v4
         with:
-          name: nuget-packages-ci
+          name: nuget-packages
           path: local-feed
 
       - name: Add local NuGet feed
         run: dotnet nuget add source $(pwd)/local-feed --name local-ci
 
       - name: Restore workloads
-        # Restore fetches the latest manifests (including MAUI 9.0.120) so NuGet
-        # version resolution matches the packed Handlers NuGet.  iOS/macCatalyst
-        # BUILD steps are omitted below because Microsoft.iOS.Sdk 26.5.x (installed
-        # here) requires Xcode 26.5, but macos-latest ships Xcode 16.4.  Merely
-        # having the 26.5 manifests installed does not affect Android or Windows builds.
         run: dotnet workload restore sample/MauiSample.csproj
 
       - name: Build sample (Android)
@@ -255,89 +322,43 @@ jobs:
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: sample-android-apk
+          name: mobile-samples
           path: sample/bin/Release/net9.0-android/*Signed.apk
           retention-days: 7
 
-      # iOS/macCatalyst builds require Xcode 26.5 (Microsoft.iOS.Sdk 26.5.x) which
-      # is not available on macos-latest (Xcode 16.4).  They are validated by the
-      # pack job (TFM restore) and native-apple.yml (native library compilation).
-      # Re-enable once GitHub Actions ships a macOS image with Xcode 26.5.
+      - name: Select Xcode 26.5
+        run: sudo xcode-select -s /Applications/Xcode_26.5.app
 
-      # - name: Build sample (iOS simulator)
-      #   run: |
-      #     dotnet build sample/MauiSample.csproj \
-      #       -f net9.0-ios \
-      #       -r iossimulator-x64 \
-      #       -c Release \
-      #       -p:EnableWindowsTargeting=true \
-      #       -p:UseLocalPackages=true
-
-      # - name: Upload iOS simulator app
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: sample-ios-simulator
-      #     path: sample/bin/Release/net9.0-ios/iossimulator-x64/**/*.app
-      #     retention-days: 7
-
-      # - name: Build sample (macCatalyst)
-      #   run: |
-      #     dotnet build sample/MauiSample.csproj \
-      #       -f net9.0-maccatalyst \
-      #       -c Release \
-      #       -p:EnableCodeSigning=false \
-      #       -p:EnableWindowsTargeting=true \
-      #       -p:UseLocalPackages=true
-
-      # - name: Upload macCatalyst app
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: sample-maccatalyst
-      #     path: sample/bin/Release/net9.0-maccatalyst/**/*.app
-      #     retention-days: 7
-
-  # ── Sample app build — Windows (separate job, needs a Windows runner) ──────
-  sample-windows:
-    name: Sample — Windows
-    runs-on: windows-latest
-    needs: [version, pack]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up .NET 8 and 9 SDKs
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-
-      - name: Download NuGet packages
-        uses: actions/download-artifact@v4
-        with:
-          name: nuget-packages-ci
-          path: local-feed
-
-      - name: Add local NuGet feed
-        run: dotnet nuget add source "${{ github.workspace }}\local-feed" --name local-ci
-
-      - name: Restore workloads
-        run: dotnet workload restore sample/MauiSample.csproj
-
-      - name: Publish sample (Windows)
+      - name: Build sample (iOS simulator)
         run: |
-          dotnet publish sample/MauiSample.csproj `
-            -f net9.0-windows10.0.19041.0 `
-            -c Release `
-            -p:WindowsPackageType=None `
-            -p:UseLocalPackages=true `
-            -o publish/MauiSample-windows
+          dotnet build sample/MauiSample.csproj \
+            -f net9.0-ios \
+            -r iossimulator-arm64 \
+            -c Release \
+            -p:EnableWindowsTargeting=true \
+            -p:UseLocalPackages=true
 
-      - name: Upload Windows MAUI sample
+      - name: Upload iOS simulator app
         uses: actions/upload-artifact@v4
         with:
-          name: sample-windows-maui
-          path: publish/MauiSample-windows/
+          name: sample-ios-simulator
+          path: sample/bin/Release/net9.0-ios/iossimulator-arm64/**/*.app
+          retention-days: 7
+
+      - name: Build sample (macCatalyst)
+        run: |
+          dotnet build sample/MauiSample.csproj \
+            -f net9.0-maccatalyst \
+            -c Release \
+            -p:EnableCodeSigning=false \
+            -p:EnableWindowsTargeting=true \
+            -p:UseLocalPackages=true
+
+      - name: Upload macCatalyst app
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-maccatalyst
+          path: sample/bin/Release/net9.0-maccatalyst/**/*.app
           retention-days: 7
 
   # ── Pack Maui.MapLibre.Native.Vulkan NuGet ────────────────────────────────
@@ -370,6 +391,12 @@ jobs:
           pattern: native-ios-arm64
           path: mln-artifacts
 
+      - name: Download Apple iOS simulator native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: native-iossimulator-arm64
+          path: mln-artifacts
+
       - name: Download Apple macCatalyst native artifacts
         uses: actions/download-artifact@v4
         with:
@@ -381,14 +408,15 @@ jobs:
           N=bindings/native-vulkan
           mkdir -p $N/win-x64 $N/win-arm64
           mkdir -p $N/android-arm64 $N/android-x64
-          mkdir -p $N/ios-arm64 $N/maccatalyst
+          mkdir -p $N/ios-arm64 $N/iossimulator-arm64 $N/maccatalyst
 
-          find mln-artifacts/native-mln-windows-x64-vulkan   -name "mln-cabi.dll"    -exec cp {} $N/win-x64/      \; 2>/dev/null || true
-          find mln-artifacts/native-mln-windows-arm64-vulkan -name "mln-cabi.dll"    -exec cp {} $N/win-arm64/    \; 2>/dev/null || true
-          find mln-artifacts/native-mln-android-arm64-v8a    -name "libmln-cabi.so"  -exec cp {} $N/android-arm64/ \; 2>/dev/null || true
-          find mln-artifacts/native-mln-android-x86_64       -name "libmln-cabi.so"  -exec cp {} $N/android-x64/  \; 2>/dev/null || true
-          find mln-artifacts/native-ios-arm64               -name "libmln-cabi.a"   -exec cp {} $N/ios-arm64/    \; 2>/dev/null || true
-          find mln-artifacts/native-maccatalyst              -name "libmln-cabi.a"   -exec cp {} $N/maccatalyst/  \; 2>/dev/null || true
+          find mln-artifacts/native-mln-windows-x64-vulkan   -name "mln-cabi.dll"    -exec cp {} $N/win-x64/           \; 2>/dev/null || true
+          find mln-artifacts/native-mln-windows-arm64-vulkan -name "mln-cabi.dll"    -exec cp {} $N/win-arm64/         \; 2>/dev/null || true
+          find mln-artifacts/native-mln-android-arm64-v8a    -name "libmln-cabi.so"  -exec cp {} $N/android-arm64/     \; 2>/dev/null || true
+          find mln-artifacts/native-mln-android-x86_64       -name "libmln-cabi.so"  -exec cp {} $N/android-x64/      \; 2>/dev/null || true
+          find mln-artifacts/native-ios-arm64               -name "libmln-cabi.a"   -exec cp {} $N/ios-arm64/          \; 2>/dev/null || true
+          find mln-artifacts/native-iossimulator-arm64      -name "libmln-cabi.a"   -exec cp {} $N/iossimulator-arm64/ \; 2>/dev/null || true
+          find mln-artifacts/native-maccatalyst              -name "libmln-cabi.a"   -exec cp {} $N/maccatalyst/       \; 2>/dev/null || true
 
           echo "Vulkan native libs arranged:"
           find $N -type f
@@ -396,7 +424,7 @@ jobs:
       - name: Restore workloads
         run: dotnet workload restore maplibre-maui.sln
 
-      - name: Pack Maui.MapLibre.Native.Vulkan
+      - name: Pack MapLibreNative.Maui.Vulkan
         run: |
           dotnet pack bindings/MapLibreNative.Maui.Vulkan.csproj \
             -c Release \
@@ -407,6 +435,6 @@ jobs:
       - name: Upload NuGet Vulkan artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nuget-packages-vulkan-ci
+          name: nuget-packages-vulkan
           path: artifacts/*.nupkg
           retention-days: 3

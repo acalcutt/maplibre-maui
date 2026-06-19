@@ -100,6 +100,7 @@ public class MapLibreMapController : IMapLibreMapController
     public event Action<Location>?           OnUserLocationUpdateReceived;
     public event Action<string>?             OnDidFailLoadingMapReceived;
     public event Action<string>?             OnStyleImageMissingReceived;
+    public event Action<string>?             OnRenderErrorReceived;
 
     // -- Construction ----------------------------------------------------------
 
@@ -239,6 +240,10 @@ public class MapLibreMapController : IMapLibreMapController
                     break;
                 case "onStyleImageMissing":
                     OnStyleImageMissingReceived?.Invoke(detail ?? string.Empty);
+                    break;
+                case "onRenderError":
+                    System.Diagnostics.Debug.WriteLine($"[MapLibre.iOS] render error: {detail}");
+                    OnRenderErrorReceived?.Invoke(detail ?? string.Empty);
                     break;
             }
         });
@@ -633,6 +638,34 @@ public class MapLibreMapController : IMapLibreMapController
     public string? QueryRenderedFeaturesInBox(double x1, double y1, double x2, double y2,
         string? layerIds = null)
         => _map?.QueryRenderedFeaturesInBox(x1, y1, x2, y2, layerIds);
+
+    // ── Viewport bounds ────────────────────────────────────────────────────────
+    public (double LatSW, double LonSW, double LatNE, double LonNE) GetVisibleBounds()
+        => _map?.LatLngBoundsForCamera() ?? default;
+
+    // ── Memory / debug ─────────────────────────────────────────────────────────
+    public void ReduceMemoryUse() => _map?.ReduceMemoryUse();
+    public void DumpDebugLogs()   => _map?.DumpDebugLogs();
+
+    // ── Feature state ──────────────────────────────────────────────────────────
+    public void SetFeatureState(string sourceId, string featureId, string stateJson,
+        string? sourceLayerId = null)
+        => _map?.SetFeatureState(sourceId, featureId, stateJson, sourceLayerId);
+
+    public string? GetFeatureState(string sourceId, string featureId,
+        string? sourceLayerId = null)
+        => _map?.GetFeatureState(sourceId, featureId, sourceLayerId);
+
+    public void RemoveFeatureState(string sourceId, string? featureId = null,
+        string? stateKey = null, string? sourceLayerId = null)
+        => _map?.RemoveFeatureState(sourceId, featureId, stateKey, sourceLayerId);
+
+    // ── Style – generic JSON add ───────────────────────────────────────────────
+    public void AddSourceJson(string sourceId, string sourceJson)
+        => _style?.AddSourceJson(sourceId, sourceJson);
+
+    public MbglLayer? AddLayerJson(string layerJson, string? beforeLayerId = null)
+        => _style?.AddLayerJson(layerJson, beforeLayerId);
 
     // -- Tier 1 – gesture / interactive movement ───────────────────────────────
     public void SetGestureInProgress(bool inProgress) => _map?.SetGestureInProgress(inProgress);

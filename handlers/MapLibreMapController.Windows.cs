@@ -465,6 +465,7 @@ public class MapLibreMapController : IMapLibreMapController
     public event Action<Location>?                       OnUserLocationUpdateReceived;
     public event Action<string>?                         OnDidFailLoadingMapReceived;
     public event Action<string>?                         OnStyleImageMissingReceived;
+    public event Action<string>?                         OnRenderErrorReceived;
 
     public MapLibreMapController(IntPtr parentHwnd, float pixelRatio, string? styleString)
     {
@@ -716,6 +717,22 @@ public class MapLibreMapController : IMapLibreMapController
                 break;
             case "onStyleImageMissing":
                 OnStyleImageMissingReceived?.Invoke(detail ?? string.Empty);
+                break;
+            case "onRenderError":
+                System.Diagnostics.Debug.WriteLine($"[MapLibre.Win] render error: {detail}");
+                OnRenderErrorReceived?.Invoke(detail ?? string.Empty);
+                break;
+            case "onDidFinishRenderingFrameNeedsRepaint":
+            case "onDidFinishRenderingFrameNeedsRepaintPlacementChanged":
+                // mbgl will call update() again on its own; OnRender() will set
+                // _renderNeedsUpdate when params are ready. Don't set the flag
+                // here — doing so causes glClear+SwapBuffers with null params.
+                break;
+            case "onDidFinishRenderingFramePlacementChanged":
+                // needsRepaint is false so mbgl won't call update() again, but
+                // labels changed — queue a repaint via TriggerRepaint() so mbgl
+                // calls update() with fresh params before we render.
+                _map?.TriggerRepaint();
                 break;
         }
     }
@@ -1664,6 +1681,8 @@ public class MapLibreMapController : IMapLibreMapController
                     ReleaseCapture();
                     _dragging = false;
                     _map?.OnPanEnd();
+                    _renderNeedsUpdate = true;
+                    _map?.TriggerRepaint();
                 }
                 return IntPtr.Zero;
             }
@@ -1845,7 +1864,35 @@ public class MapLibreMapController : IMapLibreMapController
         string? layerIds = null)
         => _map?.QueryRenderedFeaturesInBox(x1, y1, x2, y2, layerIds);
 
-    // ── Tier 1 – gesture / interactive movement ───────────────────────────────
+    // ── Viewport bounds ────────────────────────────────────────────────────────
+    public (double LatSW, double LonSW, double LatNE, double LonNE) GetVisibleBounds()
+        => _map?.LatLngBoundsForCamera() ?? default;
+
+    // ── Memory / debug ─────────────────────────────────────────────────────────
+    public void ReduceMemoryUse() => _map?.ReduceMemoryUse();
+    public void DumpDebugLogs()   => _map?.DumpDebugLogs();
+
+    // ── Feature state ──────────────────────────────────────────────────────────
+    public void SetFeatureState(string sourceId, string featureId, string stateJson,
+        string? sourceLayerId = null)
+        => _map?.SetFeatureState(sourceId, featureId, stateJson, sourceLayerId);
+
+    public string? GetFeatureState(string sourceId, string featureId,
+        string? sourceLayerId = null)
+        => _map?.GetFeatureState(sourceId, featureId, sourceLayerId);
+
+    public void RemoveFeatureState(string sourceId, string? featureId = null,
+        string? stateKey = null, string? sourceLayerId = null)
+        => _map?.RemoveFeatureState(sourceId, featureId, stateKey, sourceLayerId);
+
+    // ── Style – generic JSON add ───────────────────────────────────────────────
+    public void AddSourceJson(string sourceId, string sourceJson)
+        => _style?.AddSourceJson(sourceId, sourceJson);
+
+    public MbglLayer? AddLayerJson(string layerJson, string? beforeLayerId = null)
+        => _style?.AddLayerJson(layerJson, beforeLayerId);
+
+
     public void SetGestureInProgress(bool inProgress) => _map?.SetGestureInProgress(inProgress);
     public void MoveBy(double dx, double dy, long durationMs = 0) => _map?.MoveBy(dx, dy, durationMs);
     public void RotateBy(double x0, double y0, double x1, double y1) => _map?.RotateBy(x0, y0, x1, y1);

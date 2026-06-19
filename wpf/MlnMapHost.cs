@@ -702,6 +702,16 @@ public class MlnMapHost : HwndHost
             case "onDidFailLoadingMap":
                 Log($"onDidFailLoadingMap: {detail}");
                 break;
+            case "onDidFinishRenderingFrameNeedsRepaint":
+            case "onDidFinishRenderingFrameNeedsRepaintPlacementChanged":
+                // mbgl will call update() again on its own; OnRender() will set
+                // _renderNeedsUpdate when params are ready.
+                break;
+            case "onDidFinishRenderingFramePlacementChanged":
+                // needsRepaint is false — queue via TriggerRepaint() so update()
+                // is called with fresh params before we render.
+                _map?.TriggerRepaint();
+                break;
         }
     }
 
@@ -781,6 +791,8 @@ public class MlnMapHost : HwndHost
                         _isDragging = false;
                         ReleaseCapture();
                         _map.OnPanEnd();
+                        _renderNeedsUpdate = true;
+                        _map.TriggerRepaint();
                         handled = true;
                     }
                     break;
