@@ -724,13 +724,15 @@ public class MapLibreMapController : IMapLibreMapController
                 break;
             case "onDidFinishRenderingFrameNeedsRepaint":
             case "onDidFinishRenderingFrameNeedsRepaintPlacementChanged":
-                // mbgl still has work to do (tiles loading, animation in progress).
-                // Re-queue a render so the loop keeps running until the map is idle.
-                _renderNeedsUpdate = true;
+                // mbgl will call update() again on its own; OnRender() will set
+                // _renderNeedsUpdate when params are ready. Don't set the flag
+                // here — doing so causes glClear+SwapBuffers with null params.
                 break;
             case "onDidFinishRenderingFramePlacementChanged":
-                // Symbol placement changed — labels need a repaint.
-                _renderNeedsUpdate = true;
+                // needsRepaint is false so mbgl won't call update() again, but
+                // labels changed — queue a repaint via TriggerRepaint() so mbgl
+                // calls update() with fresh params before we render.
+                _map?.TriggerRepaint();
                 break;
         }
     }

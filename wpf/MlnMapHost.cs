@@ -704,12 +704,13 @@ public class MlnMapHost : HwndHost
                 break;
             case "onDidFinishRenderingFrameNeedsRepaint":
             case "onDidFinishRenderingFrameNeedsRepaintPlacementChanged":
-                // mbgl still has work to do — keep the render loop running.
-                _renderNeedsUpdate = true;
+                // mbgl will call update() again on its own; OnRender() will set
+                // _renderNeedsUpdate when params are ready.
                 break;
             case "onDidFinishRenderingFramePlacementChanged":
-                // Symbol placement changed — labels need a repaint.
-                _renderNeedsUpdate = true;
+                // needsRepaint is false — queue via TriggerRepaint() so update()
+                // is called with fresh params before we render.
+                _map?.TriggerRepaint();
                 break;
         }
     }
