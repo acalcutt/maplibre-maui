@@ -337,6 +337,7 @@ jobs:
             -f net9.0-ios \
             -r iossimulator-arm64 \
             -c Release \
+            -p:EnableWindowsTargeting=true \
             -p:UseLocalPackages=true
 
       - name: Upload iOS simulator app
@@ -352,6 +353,7 @@ jobs:
             -f net9.0-maccatalyst \
             -c Release \
             -p:EnableCodeSigning=false \
+            -p:EnableWindowsTargeting=true \
             -p:UseLocalPackages=true
 
       - name: Upload macCatalyst app
@@ -390,6 +392,12 @@ jobs:
           pattern: native-ios-arm64
           path: mln-artifacts
 
+      - name: Download Apple iOS simulator native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: native-iossimulator-arm64
+          path: mln-artifacts
+
       - name: Download Apple macCatalyst native artifacts
         uses: actions/download-artifact@v4
         with:
@@ -401,13 +409,14 @@ jobs:
           N=bindings/native-vulkan
           mkdir -p $N/win-x64 $N/win-arm64
           mkdir -p $N/android-arm64 $N/android-x64
-          mkdir -p $N/ios-arm64 $N/maccatalyst
+          mkdir -p $N/ios-arm64 $N/iossimulator-arm64 $N/maccatalyst
 
           find mln-artifacts/native-mln-windows-x64-vulkan   -name "mln-cabi.dll"   -exec cp {} $N/win-x64/       \; 2>/dev/null || true
           find mln-artifacts/native-mln-windows-arm64-vulkan -name "mln-cabi.dll"   -exec cp {} $N/win-arm64/     \; 2>/dev/null || true
           find mln-artifacts/native-mln-android-arm64-v8a    -name "libmln-cabi.so" -exec cp {} $N/android-arm64/ \; 2>/dev/null || true
           find mln-artifacts/native-mln-android-x86_64       -name "libmln-cabi.so" -exec cp {} $N/android-x64/   \; 2>/dev/null || true
           find mln-artifacts/native-ios-arm64               -name "libmln-cabi.a"  -exec cp {} $N/ios-arm64/     \; 2>/dev/null || true
+          find mln-artifacts/native-iossimulator-arm64      -name "libmln-cabi.a"  -exec cp {} $N/iossimulator-arm64/ \; 2>/dev/null || true
           find mln-artifacts/native-maccatalyst              -name "libmln-cabi.a"  -exec cp {} $N/maccatalyst/   \; 2>/dev/null || true
 
           echo "Vulkan native libs arranged:"

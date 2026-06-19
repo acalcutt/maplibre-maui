@@ -140,7 +140,7 @@ jobs:
             -p:_MbglNativeDir=$(pwd)/bindings/native/ \
             -o artifacts/
 
-      - name: Pack Maui.Maplibre.Handlers
+      - name: Pack MapLibreNative.Maui.Handlers
         run: |
           dotnet pack handlers/MapLibreNative.Maui.Handlers.csproj \
             -c Release \
@@ -150,7 +150,7 @@ jobs:
       - name: Upload NuGet artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nuget-packages-ci
+          name: nuget-packages
           path: artifacts/*.nupkg
           retention-days: 3
 
@@ -186,18 +186,25 @@ jobs:
       - name: Restore workloads
         run: dotnet workload install maui
 
-      - name: Pack Maui.MapLibre.WPF
+      - name: Pack MapLibreNative.Maui.WPF
         shell: bash
         run: |
           dotnet pack wpf/MapLibreNative.Maui.WPF.csproj \
             -c Release \
-            -p:Version=${{ needs.version.outputs.version }} \
+            -p:Version=${{ env.CI_VER }} \
             -o artifacts/
+
+      - name: Upload WPF NuGet artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages-wpf
+          path: artifacts/*.nupkg
+          retention-days: 3
 
       - name: Download NuGet packages (for local feed)
         uses: actions/download-artifact@v4
         with:
-          name: nuget-packages-ci
+          name: nuget-packages
           path: local-feed
 
       - name: Add local NuGet feed
@@ -231,18 +238,44 @@ jobs:
             -c Release -r win-arm64 --self-contained false \
             -o publish/WpfExample-win-arm64
 
+      - name: Publish MauiSample (win-x64)
+        shell: bash
+        run: |
+          dotnet publish sample/MauiSample.csproj \
+            -f net9.0-windows10.0.19041.0 \
+            -c Release -r win-x64 \
+            -p:TargetFrameworks=net9.0-windows10.0.19041.0 \
+            -p:WindowsPackageType=None \
+            -p:UseLocalPackages=true \
+            -o publish/MauiSample-win-x64
+
+      - name: Publish MauiSample (win-arm64)
+        shell: bash
+        run: |
+          dotnet publish sample/MauiSample.csproj \
+            -f net9.0-windows10.0.19041.0 \
+            -c Release -r win-arm64 \
+            -p:TargetFrameworks=net9.0-windows10.0.19041.0 \
+            -p:WindowsPackageType=None \
+            -p:UseLocalPackages=true \
+            -o publish/MauiSample-win-arm64
+
       - name: Zip sample outputs
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path samples -Force | Out-Null
-          @('ConsoleExample-win-x64','ConsoleExample-win-arm64','WpfExample-win-x64','WpfExample-win-arm64') | ForEach-Object {
+          @(
+            'ConsoleExample-win-x64','ConsoleExample-win-arm64',
+            'WpfExample-win-x64','WpfExample-win-arm64',
+            'MauiSample-win-x64','MauiSample-win-arm64'
+          ) | ForEach-Object {
             Compress-Archive -Path "publish/$_/*" -DestinationPath "samples/$_.zip"
           }
 
-      - name: Upload Windows samples (CI)
+      - name: Upload Windows samples
         uses: actions/upload-artifact@v4
         with:
-          name: windows-samples-ci
+          name: windows-samples
           path: samples/*.zip
           retention-days: 7
 
@@ -265,7 +298,7 @@ jobs:
       - name: Download NuGet packages
         uses: actions/download-artifact@v4
         with:
-          name: nuget-packages-ci
+          name: nuget-packages
           path: local-feed
 
       - name: Add local NuGet feed
@@ -285,7 +318,7 @@ jobs:
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: sample-android-apk
+          name: mobile-samples
           path: sample/bin/Release/net9.0-android/*Signed.apk
           retention-days: 7
 
@@ -324,50 +357,6 @@ jobs:
           path: sample/bin/Release/net9.0-maccatalyst/**/*.app
           retention-days: 7
 
-  # ── Sample app build — Windows (separate job, needs a Windows runner) ──────
-  sample-windows:
-    name: Sample — Windows
-    runs-on: windows-latest
-    needs: [version, pack]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up .NET 8 and 9 SDKs
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-
-      - name: Download NuGet packages
-        uses: actions/download-artifact@v4
-        with:
-          name: nuget-packages-ci
-          path: local-feed
-
-      - name: Add local NuGet feed
-        run: dotnet nuget add source "${{ github.workspace }}\local-feed" --name local-ci
-
-      - name: Restore workloads
-        run: dotnet workload install maui
-
-      - name: Publish sample (Windows)
-        run: |
-          dotnet publish sample/MauiSample.csproj `
-            -f net9.0-windows10.0.19041.0 `
-            -c Release `
-            -p:WindowsPackageType=None `
-            -p:UseLocalPackages=true `
-            -o publish/MauiSample-windows
-
-      - name: Upload Windows MAUI sample
-        uses: actions/upload-artifact@v4
-        with:
-          name: sample-windows-maui
-          path: publish/MauiSample-windows/
-          retention-days: 7
-
   # ── Pack Maui.MapLibre.Native.Vulkan NuGet ────────────────────────────────
   pack-vulkan:
     name: Pack NuGet (Vulkan)
@@ -398,6 +387,12 @@ jobs:
           pattern: native-ios-arm64
           path: mln-artifacts
 
+      - name: Download Apple iOS simulator native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: native-iossimulator-arm64
+          path: mln-artifacts
+
       - name: Download Apple macCatalyst native artifacts
         uses: actions/download-artifact@v4
         with:
@@ -409,14 +404,15 @@ jobs:
           N=bindings/native-vulkan
           mkdir -p $N/win-x64 $N/win-arm64
           mkdir -p $N/android-arm64 $N/android-x64
-          mkdir -p $N/ios-arm64 $N/maccatalyst
+          mkdir -p $N/ios-arm64 $N/iossimulator-arm64 $N/maccatalyst
 
-          find mln-artifacts/native-mln-windows-x64-vulkan   -name "mln-cabi.dll"    -exec cp {} $N/win-x64/      \; 2>/dev/null || true
-          find mln-artifacts/native-mln-windows-arm64-vulkan -name "mln-cabi.dll"    -exec cp {} $N/win-arm64/    \; 2>/dev/null || true
-          find mln-artifacts/native-mln-android-arm64-v8a    -name "libmln-cabi.so"  -exec cp {} $N/android-arm64/ \; 2>/dev/null || true
-          find mln-artifacts/native-mln-android-x86_64       -name "libmln-cabi.so"  -exec cp {} $N/android-x64/  \; 2>/dev/null || true
-          find mln-artifacts/native-ios-arm64               -name "libmln-cabi.a"   -exec cp {} $N/ios-arm64/    \; 2>/dev/null || true
-          find mln-artifacts/native-maccatalyst              -name "libmln-cabi.a"   -exec cp {} $N/maccatalyst/  \; 2>/dev/null || true
+          find mln-artifacts/native-mln-windows-x64-vulkan   -name "mln-cabi.dll"    -exec cp {} $N/win-x64/           \; 2>/dev/null || true
+          find mln-artifacts/native-mln-windows-arm64-vulkan -name "mln-cabi.dll"    -exec cp {} $N/win-arm64/         \; 2>/dev/null || true
+          find mln-artifacts/native-mln-android-arm64-v8a    -name "libmln-cabi.so"  -exec cp {} $N/android-arm64/     \; 2>/dev/null || true
+          find mln-artifacts/native-mln-android-x86_64       -name "libmln-cabi.so"  -exec cp {} $N/android-x64/      \; 2>/dev/null || true
+          find mln-artifacts/native-ios-arm64               -name "libmln-cabi.a"   -exec cp {} $N/ios-arm64/          \; 2>/dev/null || true
+          find mln-artifacts/native-iossimulator-arm64      -name "libmln-cabi.a"   -exec cp {} $N/iossimulator-arm64/ \; 2>/dev/null || true
+          find mln-artifacts/native-maccatalyst              -name "libmln-cabi.a"   -exec cp {} $N/maccatalyst/       \; 2>/dev/null || true
 
           echo "Vulkan native libs arranged:"
           find $N -type f
@@ -424,7 +420,7 @@ jobs:
       - name: Restore workloads
         run: dotnet workload restore maplibre-maui.sln
 
-      - name: Pack Maui.MapLibre.Native.Vulkan
+      - name: Pack MapLibreNative.Maui.Vulkan
         run: |
           dotnet pack bindings/MapLibreNative.Maui.Vulkan.csproj \
             -c Release \
@@ -435,6 +431,6 @@ jobs:
       - name: Upload NuGet Vulkan artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nuget-packages-vulkan-ci
+          name: nuget-packages-vulkan
           path: artifacts/*.nupkg
           retention-days: 3
