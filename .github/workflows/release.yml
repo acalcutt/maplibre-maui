@@ -188,6 +188,9 @@ jobs:
           echo "Staged DLLs:"
           find bindings/native -name "*.dll"
 
+      - name: Restore workloads
+        run: dotnet workload install maui
+
       - name: Pack MapLibreNative.Maui.WPF
         shell: bash
         run: |
