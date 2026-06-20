@@ -488,6 +488,9 @@ public class MlnMapHost : HwndHost
             };
             parentWin.Activated += (_, _) =>
             {
+                // Don't reopen popups while the window is still minimized
+                // (WM_ACTIVATE can fire even on a minimized window).
+                if (parentWin.WindowState == WindowState.Minimized) return;
                 UpdateNavPopupOpen();
                 UpdateAttributionPopupOpen();
                 if (_attrLoaded) CollapseAttribution();  // show ⓘ button after re-focus
@@ -520,7 +523,12 @@ public class MlnMapHost : HwndHost
                 {
                     var wasOpen = _navPopup.IsOpen;
                     _navPopup.IsOpen = false;
-                    Dispatcher.BeginInvoke(DispatcherPriority.Render, () => _navPopup.IsOpen = wasOpen);
+                    Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
+                    {
+                        // Don't reopen if the window was minimized after LocationChanged fired.
+                        if (parentWin.WindowState != WindowState.Minimized)
+                            _navPopup.IsOpen = wasOpen;
+                    });
                 }
                 if (_attrLoaded && _initialized && IsVisible)
                 {
@@ -530,6 +538,7 @@ public class MlnMapHost : HwndHost
                     if (_attrButtonPopup  != null) _attrButtonPopup.IsOpen  = false;
                     Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
                     {
+                        if (parentWin.WindowState == WindowState.Minimized) return;
                         if (_attributionPopup != null) _attributionPopup.IsOpen = attrWasOpen;
                         if (_attrButtonPopup  != null) _attrButtonPopup.IsOpen  = btnWasOpen;
                     });
