@@ -4,6 +4,8 @@ using Android.Widget;
 using Android.Runtime;
 using Android.Text;
 using Android.Text.Method;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -22,6 +24,233 @@ namespace MapLibreNative.Maui.Handlers;
 /// </summary>
 public class MapLibreMapController : IMapLibreMapController
 {
+    // -- HTTP provider (shared across all map instances) -----------------------
+
+    private static readonly HttpClient s_http = new(new HttpClientHandler
+    {
+        AllowAutoRedirect       = true,
+        MaxAutomaticRedirections = 10,
+    })
+    {
+        Timeout = TimeSpan.FromSeconds(30),
+        DefaultRequestHeaders = { { "User-Agent", "MapLibreNative/1.0 (.NET MAUI Android)" } },
+    };
+
+    // Keep the delegate alive for the lifetime of the process so the GC
+    // never collects it while the native side is still pointing to it.
+    private static readonly NativeMethods.HttpProviderDelegate s_httpProvider = OnHttpRequest;
+
+    // Tracks in-flight CancellationTokenSources keyed by request_id so we can
+    // abort the HttpClient request when the native side cancels it.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, CancellationTokenSource>
+        s_pendingRequests = new();
+
+    private static bool s_httpProviderRegistered;
+
+    private static void EnsureHttpProviderRegistered()
+    {
+        if (s_httpProviderRegistered) return;
+        s_httpProviderRegistered = true;
+        NativeMethods.SetHttpProvider(s_httpProvider, IntPtr.Zero);
+    }
+
+    private static void OnHttpRequest(ulong requestId, IntPtr urlPtr, IntPtr etagPtr,
+                                       IntPtr modifiedPtr, long rangeStart, long rangeEnd,
+                                       IntPtr userdata)
+    {
+        string url      = Marshal.PtrToStringUTF8(urlPtr)  ?? string.Empty;
+        string? etag    = Marshal.PtrToStringUTF8(etagPtr);
+        string? modified = Marshal.PtrToStringUTF8(modifiedPtr);
+
+        var cts = new CancellationTokenSource();
+        s_pendingRequests[requestId] = cts;
+
+        // Fire-and-forget; errors are delivered via mbgl_http_respond.
+        _ = FetchAsync(requestId, url, etag, modified, rangeStart, rangeEnd, cts.Token);
+    }
+
+    private static async Task FetchAsync(ulong requestId, string url,
+                                          string? etag, string? modified,
+                                          long rangeStart, long rangeEnd,
+                                          CancellationToken ct)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+
+            // Conditional GET headers
+            if (!string.IsNullOrEmpty(etag))
+                req.Headers.IfNoneMatch.Add(new EntityTagHeaderValue($"\"{etag}\"", true));
+            else if (!string.IsNullOrEmpty(modified))
+                req.Headers.IfModifiedSince = DateTimeOffset.TryParse(modified, out var dt) ? dt : null;
+
+            // Range request (used by PMTiles and other partial-content sources)
+            if (rangeStart >= 0 && rangeEnd >= rangeStart)
+                req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(rangeStart, rangeEnd);
+
+            HttpResponseMessage resp;
+            try
+            {
+                resp = await s_http.SendAsync(req, HttpCompletionOption.ResponseContentRead, ct)
+                                   .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Request was cancelled from the native side — no response needed.
+                s_pendingRequests.TryRemove(requestId, out _);
+                return;
+            }
+            catch (Exception ex)
+            {
+                s_pendingRequests.TryRemove(requestId, out _);
+                RespondError(requestId, NativeMethods.MbglHttpError.Connection, ex.Message);
+                return;
+            }
+
+            s_pendingRequests.TryRemove(requestId, out _);
+
+            int status = (int)resp.StatusCode;
+
+            if (resp.StatusCode == System.Net.HttpStatusCode.NotModified)
+            {
+                RespondNotModified(requestId);
+                return;
+            }
+
+            if (resp.StatusCode == System.Net.HttpStatusCode.NoContent ||
+                (status == 404 && url.Contains("/tiles/")))
+            {
+                RespondNoContent(requestId);
+                return;
+            }
+
+            if (status == 404)
+            {
+                RespondError(requestId, NativeMethods.MbglHttpError.NotFound, "HTTP 404");
+                return;
+            }
+
+            if (status == 429)
+            {
+                RespondError(requestId, NativeMethods.MbglHttpError.RateLimit, "HTTP 429");
+                return;
+            }
+
+            if (status >= 500 && status < 600)
+            {
+                RespondError(requestId, NativeMethods.MbglHttpError.Server, $"HTTP {status}");
+                return;
+            }
+
+            // 200 OK and 206 Partial Content are both treated as success.
+            if (status != 200 && status != 206)
+            {
+                RespondError(requestId, NativeMethods.MbglHttpError.Other, $"HTTP {status}");
+                return;
+            }
+
+            byte[] body = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+
+            string? respEtag     = resp.Headers.ETag?.Tag?.Trim('"');
+            string? respModified = resp.Content.Headers.LastModified?.ToString("R");
+            string? respExpires  = resp.Content.Headers.Expires?.ToString("R");
+            string? cacheControl = resp.Headers.CacheControl?.ToString();
+            int     mustReval    = resp.Headers.CacheControl?.MustRevalidate == true ? 1 : 0;
+
+            RespondSuccess(requestId, body, respEtag, respModified, respExpires,
+                           cacheControl, mustReval);
+        }
+        catch (OperationCanceledException)
+        {
+            s_pendingRequests.TryRemove(requestId, out _);
+        }
+        catch (Exception ex)
+        {
+            s_pendingRequests.TryRemove(requestId, out _);
+            RespondError(requestId, NativeMethods.MbglHttpError.Connection, ex.Message);
+        }
+    }
+
+    private static void RespondSuccess(ulong requestId, byte[] body,
+                                       string? etag, string? modified,
+                                       string? expires, string? cacheControl,
+                                       int mustReval)
+    {
+        var etagBytes    = ToNullTerminatedUtf8(etag);
+        var modBytes     = ToNullTerminatedUtf8(modified);
+        var expiresBytes = ToNullTerminatedUtf8(expires);
+        var ccBytes      = ToNullTerminatedUtf8(cacheControl);
+
+        // Use a dummy single-byte array when body is empty so fixed() gives a
+        // valid (non-null) pointer — the C++ side checks data_len so the byte
+        // itself is never read.
+        byte[] safeBody = body.Length > 0 ? body : new byte[1];
+
+        unsafe
+        {
+            fixed (byte* bodyPtr = safeBody)
+            fixed (byte* e = etagBytes)
+            fixed (byte* m = modBytes)
+            fixed (byte* x = expiresBytes)
+            fixed (byte* c = ccBytes)
+            {
+                NativeMethods.HttpRespond(
+                    requestId,
+                    NativeMethods.MbglHttpError.None,
+                    IntPtr.Zero,
+                    200,
+                    (nint)bodyPtr,
+                    body.Length,
+                    e is null ? IntPtr.Zero : (IntPtr)e,
+                    m is null ? IntPtr.Zero : (IntPtr)m,
+                    x is null ? IntPtr.Zero : (IntPtr)x,
+                    c is null ? IntPtr.Zero : (IntPtr)c,
+                    0, 0, mustReval);
+            }
+        }
+    }
+
+    private static byte[]? ToNullTerminatedUtf8(string? s)
+    {
+        if (string.IsNullOrEmpty(s)) return null;
+        int len = System.Text.Encoding.UTF8.GetByteCount(s);
+        var buf = new byte[len + 1]; // +1 for null terminator (already zero-initialized)
+        System.Text.Encoding.UTF8.GetBytes(s, 0, s.Length, buf, 0);
+        return buf;
+    }
+
+    private static void RespondNotModified(ulong requestId)
+    {
+        NativeMethods.HttpRespond(requestId, NativeMethods.MbglHttpError.None,
+            IntPtr.Zero, 304, IntPtr.Zero, 0,
+            IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero,
+            0, 1, 0);
+    }
+
+    private static void RespondNoContent(ulong requestId)
+    {
+        NativeMethods.HttpRespond(requestId, NativeMethods.MbglHttpError.None,
+            IntPtr.Zero, 204, IntPtr.Zero, 0,
+            IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero,
+            1, 0, 0);
+    }
+
+    private static void RespondError(ulong requestId, NativeMethods.MbglHttpError error, string message)
+    {
+        var msgBytes = ToNullTerminatedUtf8(message);
+        unsafe
+        {
+            fixed (byte* msg = msgBytes)
+            {
+                NativeMethods.HttpRespond(requestId, error,
+                    msg is null ? IntPtr.Zero : (IntPtr)msg,
+                    0, IntPtr.Zero, 0,
+                    IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero,
+                    0, 0, 0);
+            }
+        }
+    }
+
     // -- Layout property name set (same as Windows controller) ----------------
 
     private static readonly HashSet<string> LayoutPropertyNames = new(StringComparer.Ordinal)
@@ -61,6 +290,19 @@ public class MapLibreMapController : IMapLibreMapController
     private int             _attrCollapseGen;            // generation counter for auto-collapse timer
     private bool            _attrLoaded;                 // true once attribution content has been fetched
 
+    // -- Gesture state ---------------------------------------------------------
+
+    private GestureDetector      _gestureDetector = null!;
+    private ScaleGestureDetector _scaleDetector   = null!;
+    private bool _scrollGesturesEnabled = true;
+    private bool _zoomGesturesEnabled   = true;
+    private bool _rotateGesturesEnabled = true;
+    private bool _tiltGesturesEnabled   = true;
+    // Two-pointer tracking (rotation + tilt)
+    private float _tpPrevAngle;
+    private float _tpPrevMidY;
+    private bool  _tpActive;
+
     public FrameLayout View { get; private set; } = null!;
 
     // -- Events ----------------------------------------------------------------
@@ -86,6 +328,8 @@ public class MapLibreMapController : IMapLibreMapController
         _pixelRatio  = pixelRatio;
         _styleString = styleString;
 
+        EnsureHttpProviderRegistered();
+
         var ctx = Android.App.Application.Context!;
 
         _surfaceView = new SurfaceView(ctx);
@@ -96,6 +340,7 @@ public class MapLibreMapController : IMapLibreMapController
             Destroyed = _ => DisposeNative(),
         };
         _surfaceView.Holder!.AddCallback(_surfaceCb);
+        SetupGestureDetectors();
 
         // Attribution overlay (bottom-right corner, OSM licence compliance)
         _attrView = new TextView(ctx);
@@ -239,11 +484,11 @@ public class MapLibreMapController : IMapLibreMapController
                         minZoom, maxZoom, minPitch, maxPitch);
     }
     public void SetCompassEnabled(bool v)                     { }
-    public void SetRotateGesturesEnabled(bool v)              { }
-    public void SetScrollGesturesEnabled(bool v)              { }
-    public void SetTiltGesturesEnabled(bool v)                { }
+    public void SetRotateGesturesEnabled(bool v)  => _rotateGesturesEnabled = v;
+    public void SetScrollGesturesEnabled(bool v)  => _scrollGesturesEnabled = v;
+    public void SetTiltGesturesEnabled(bool v)    => _tiltGesturesEnabled   = v;
     public void SetTrackCameraPosition(bool v)                { }
-    public void SetZoomGesturesEnabled(bool v)                { }
+    public void SetZoomGesturesEnabled(bool v)    => _zoomGesturesEnabled   = v;
     public void SetMyLocationEnabled(bool v)                  { }
     public void SetMyLocationTrackingMode(int v)              { }
     public void SetMyLocationRenderMode(int v)                { }
@@ -662,6 +907,185 @@ public class MapLibreMapController : IMapLibreMapController
     public bool ShowBearing    { get; set; } = true;
     public void UpdateLocationIndicator(double lat, double lon, float bearing = 0, float accuracyMeters = 10) { }
     public void ClearLocationIndicator() { }
+
+    // -- Gesture detection -----------------------------------------------------
+
+    private void SetupGestureDetectors()
+    {
+        var ctx = Android.App.Application.Context!;
+        var gl  = new MapGestureListener(this);
+        _gestureDetector = new GestureDetector(ctx, gl);
+        _scaleDetector   = new ScaleGestureDetector(ctx, new MapScaleListener(this));
+        _surfaceView.SetOnTouchListener(new MapTouchListener(this));
+    }
+
+    private class MapTouchListener : Java.Lang.Object, Android.Views.View.IOnTouchListener
+    {
+        private readonly MapLibreMapController _ctrl;
+        public MapTouchListener(MapLibreMapController ctrl) => _ctrl = ctrl;
+
+        public bool OnTouch(Android.Views.View? v, MotionEvent? e)
+        {
+            if (e == null) return false;
+
+            // Feed every event to both detectors.
+            _ctrl._gestureDetector.OnTouchEvent(e);
+            _ctrl._scaleDetector.OnTouchEvent(e);
+
+            switch (e.ActionMasked)
+            {
+                case MotionEventActions.Down:
+                    _ctrl._map?.SetGestureInProgress(true);
+                    _ctrl._map?.CancelTransitions();
+                    _ctrl._tpActive = false;
+                    break;
+
+                case MotionEventActions.PointerDown:
+                    if (e.PointerCount == 2 &&
+                        (_ctrl._rotateGesturesEnabled || _ctrl._tiltGesturesEnabled))
+                    {
+                        _ctrl._tpActive    = true;
+                        _ctrl._tpPrevAngle = TwoFingerAngle(e);
+                        _ctrl._tpPrevMidY  = TwoFingerMidY(e);
+                    }
+                    break;
+
+                case MotionEventActions.Move:
+                    if (_ctrl._tpActive && e.PointerCount >= 2)
+                    {
+                        float pr = _ctrl._pixelRatio;
+
+                        if (_ctrl._rotateGesturesEnabled)
+                        {
+                            float newAngle = TwoFingerAngle(e);
+                            float delta    = newAngle - _ctrl._tpPrevAngle;
+                            while (delta >  180f) delta -= 360f;
+                            while (delta < -180f) delta += 360f;
+                            if (System.Math.Abs(delta) > 0.15f)
+                            {
+                                double rad = delta * System.Math.PI / 180.0;
+                                double cx  = _ctrl._surfaceView.Width  / (2.0 * pr);
+                                double cy  = _ctrl._surfaceView.Height / (2.0 * pr);
+                                const double r = 100.0;
+                                _ctrl._map?.RotateBy(
+                                    cx + r, cy,
+                                    cx + r * System.Math.Cos(rad),
+                                    cy + r * System.Math.Sin(rad));
+                                _ctrl._tpPrevAngle = newAngle;
+                            }
+                        }
+
+                        if (_ctrl._tiltGesturesEnabled)
+                        {
+                            float newMidY = TwoFingerMidY(e);
+                            float deltaY  = newMidY - _ctrl._tpPrevMidY;
+                            if (System.Math.Abs(deltaY) > 0.5f)
+                            {
+                                // Fingers moving up (negative deltaY) increases pitch.
+                                _ctrl._map?.PitchBy(-deltaY / _ctrl._pixelRatio * 0.4);
+                                _ctrl._tpPrevMidY = newMidY;
+                            }
+                        }
+                    }
+                    break;
+
+                case MotionEventActions.PointerUp:
+                    if (e.PointerCount <= 2)
+                        _ctrl._tpActive = false;
+                    break;
+
+                case MotionEventActions.Up:
+                    _ctrl._map?.SetGestureInProgress(false);
+                    _ctrl._tpActive = false;
+                    break;
+
+                case MotionEventActions.Cancel:
+                    _ctrl._map?.SetGestureInProgress(false);
+                    _ctrl._tpActive = false;
+                    break;
+            }
+            return true;
+        }
+
+        private static float TwoFingerAngle(MotionEvent e) =>
+            (float)(System.Math.Atan2(e.GetY(1) - e.GetY(0), e.GetX(1) - e.GetX(0))
+                    * 180.0 / System.Math.PI);
+
+        private static float TwoFingerMidY(MotionEvent e) =>
+            (e.GetY(0) + e.GetY(1)) * 0.5f;
+    }
+
+    private class MapGestureListener : GestureDetector.SimpleOnGestureListener
+    {
+        private readonly MapLibreMapController _ctrl;
+        public MapGestureListener(MapLibreMapController ctrl) => _ctrl = ctrl;
+
+        public override bool OnScroll(MotionEvent? e1, MotionEvent? e2,
+                                      float distanceX, float distanceY)
+        {
+            // Suppress single-finger scroll while two pointers are active
+            // (scale/rotate/tilt are handled by MapTouchListener directly).
+            if (!_ctrl._scrollGesturesEnabled || _ctrl._tpActive) return false;
+            float pr = _ctrl._pixelRatio;
+            _ctrl._map?.MoveBy(-distanceX / pr, -distanceY / pr);
+            return true;
+        }
+
+        public override bool OnFling(MotionEvent? e1, MotionEvent? e2,
+                                     float velocityX, float velocityY)
+        {
+            if (!_ctrl._scrollGesturesEnabled) return false;
+            double pr    = _ctrl._pixelRatio;
+            double velXY = System.Math.Sqrt(velocityX * velocityX + velocityY * velocityY) / pr;
+            if (velXY < 200) return false;   // too slow to fling
+            long animTime  = (long)System.Math.Min(velXY / 7.0 + 400, 1500);
+            double offsetX = velocityX * animTime * 0.00028 / pr;
+            double offsetY = velocityY * animTime * 0.00028 / pr;
+            _ctrl._map?.MoveBy(offsetX, offsetY, animTime);
+            return true;
+        }
+
+        public override void OnLongPress(MotionEvent e)
+        {
+            if (_ctrl._tpActive || _ctrl._map == null) return;
+            float pr       = _ctrl._pixelRatio;
+            var (lat, lon) = _ctrl._map.LatLngForPixel(e.GetX() / pr, e.GetY() / pr);
+            _ctrl.OnMapLongClickReceived?.Invoke(new LatLng(lat, lon));
+        }
+
+        public override bool OnSingleTapConfirmed(MotionEvent e)
+        {
+            if (_ctrl._map == null) return false;
+            float pr       = _ctrl._pixelRatio;
+            var (lat, lon) = _ctrl._map.LatLngForPixel(e.GetX() / pr, e.GetY() / pr);
+            _ctrl.OnMapClickReceived?.Invoke(new LatLng(lat, lon));
+            return true;
+        }
+
+        public override bool OnDoubleTap(MotionEvent e)
+        {
+            if (!_ctrl._zoomGesturesEnabled) return false;
+            float pr = _ctrl._pixelRatio;
+            _ctrl._map?.OnDoubleTap(e.GetX() / pr, e.GetY() / pr);
+            return true;
+        }
+    }
+
+    private class MapScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener
+    {
+        private readonly MapLibreMapController _ctrl;
+        public MapScaleListener(MapLibreMapController ctrl) => _ctrl = ctrl;
+
+        public override bool OnScale(ScaleGestureDetector detector)
+        {
+            if (!_ctrl._zoomGesturesEnabled) return false;
+            float pr     = _ctrl._pixelRatio;
+            float focusX = detector.FocusX / pr;
+            float focusY = detector.FocusY / pr;
+            _ctrl._map?.OnPinch(detector.ScaleFactor, focusX, focusY);
+            return true;
+        }
+    }
 
     // -- Cleanup ---------------------------------------------------------------
 
