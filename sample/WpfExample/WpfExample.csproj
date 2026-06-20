@@ -9,9 +9,13 @@
     <StartupObject>WpfExample.App</StartupObject>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(UseLocalPackages)' != 'true'">
     <!-- MbglMapHost + transitive MapLibreNative.Maui (native DLL) -->
     <ProjectReference Include="..\..\wpf\MapLibreNative.Maui.WPF.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseLocalPackages)' == 'true'">
+    <PackageReference Include="MapLibreNative.Maui.WPF" Version="*-*" />
   </ItemGroup>
 
 </Project>

@@ -224,6 +224,7 @@ jobs:
           dotnet publish sample/ConsoleExample/ConsoleExample.csproj \
             -c Release -r win-x64 --self-contained false \
             -f net10.0-windows10.0.19041.0 \
+            -p:UseLocalPackages=true \
             -o publish/ConsoleExample-win-x64
 
       - name: Publish ConsoleExample (win-arm64)
@@ -232,6 +233,7 @@ jobs:
           dotnet publish sample/ConsoleExample/ConsoleExample.csproj \
             -c Release -r win-arm64 --self-contained false \
             -f net10.0-windows10.0.19041.0 \
+            -p:UseLocalPackages=true \
             -o publish/ConsoleExample-win-arm64
 
       - name: Publish WpfExample (win-x64)
@@ -240,6 +242,7 @@ jobs:
           dotnet publish sample/WpfExample/WpfExample.csproj \
             -c Release -r win-x64 --self-contained false \
             -f net10.0-windows10.0.19041.0 \
+            -p:UseLocalPackages=true \
             -o publish/WpfExample-win-x64
 
       - name: Publish WpfExample (win-arm64)
@@ -248,6 +251,7 @@ jobs:
           dotnet publish sample/WpfExample/WpfExample.csproj \
             -c Release -r win-arm64 --self-contained false \
             -f net10.0-windows10.0.19041.0 \
+            -p:UseLocalPackages=true \
             -o publish/WpfExample-win-arm64
 
       - name: Publish MauiSample (win-x64)
