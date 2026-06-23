@@ -944,10 +944,10 @@ public class MapLibreMapController : IMapLibreMapController
         if (coordinates != null)
         {
             _style.AddImageSource(sourceName, url,
-                coordinates.TopRight.Lat,    coordinates.TopRight.Lng,
-                coordinates.TopLeft.Lat,     coordinates.TopLeft.Lng,
-                coordinates.BottomRight.Lat, coordinates.BottomRight.Lng,
-                coordinates.BottomLeft.Lat,  coordinates.BottomLeft.Lng);
+                coordinates.TopRight.Latitude,    coordinates.TopRight.Longitude,
+                coordinates.TopLeft.Latitude,     coordinates.TopLeft.Longitude,
+                coordinates.BottomRight.Latitude, coordinates.BottomRight.Longitude,
+                coordinates.BottomLeft.Latitude,  coordinates.BottomLeft.Longitude);
         }
         else
         {
