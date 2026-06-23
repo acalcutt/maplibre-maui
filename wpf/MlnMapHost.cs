@@ -174,6 +174,46 @@ public class MlnMapHost : HwndHost
     }
 
     /// <summary>
+    /// Add a raster tile source from a TileJSON or tile-template URL.
+    /// <paramref name="tileSize"/> defaults to 512.
+    /// No-op if the source already exists.
+    /// </summary>
+    public void AddRasterSource(string sourceId, string url, int tileSize = 512)
+    {
+        if (_style == null) return;
+        if (!_style.HasSource(sourceId))
+            _style.AddRasterSource(sourceId, url, tileSize);
+        _renderNeedsUpdate = true;
+    }
+
+    /// <summary>
+    /// Add a raster-DEM tile source (for hillshade/terrain) from a TileJSON or tile-template URL.
+    /// <paramref name="tileSize"/> defaults to 512.
+    /// No-op if the source already exists.
+    /// </summary>
+    public void AddRasterDemSource(string sourceId, string url, int tileSize = 512)
+    {
+        if (_style == null) return;
+        if (!_style.HasSource(sourceId))
+            _style.AddRasterDemSource(sourceId, url, tileSize);
+        _renderNeedsUpdate = true;
+    }
+
+    /// <summary>
+    /// Add an image source from a URL.
+    /// Note: the C ABI does not yet support lat/lng quad coordinates for image sources;
+    /// the source is registered as a raster source (same workaround as the MAUI controller).
+    /// No-op if the source already exists.
+    /// </summary>
+    public void AddImageSource(string sourceId, string url)
+    {
+        if (_style == null) return;
+        if (!_style.HasSource(sourceId))
+            _style.AddRasterSource(sourceId, url);
+        _renderNeedsUpdate = true;
+    }
+
+    /// <summary>
     /// Add a source from a raw MapLibre source-spec JSON object.
     /// Accepts any source type — geojson, vector, raster, raster-dem, image, etc.
     /// The JSON must include a <c>"type"</c> field, e.g.:

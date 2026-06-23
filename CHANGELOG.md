@@ -9,7 +9,7 @@
 
 ## 3.2.6
 ### ✨ Features and improvements
-- **WPF: `AddVectorSourceUrl` and `AddSourceJson`** — Two new `MlnMapHost` methods expose existing bindings to WPF callers. `AddVectorSourceUrl(sourceId, tileJsonUrl)` adds a `type:"vector"` source backed by a TileJSON URL so MapLibre fetches only the MVT tiles in the current viewport. `AddSourceJson(sourceId, sourceJson)` accepts a raw MapLibre source-spec JSON object of any type (`geojson`, `vector`, `raster`, `raster-dem`, `image`, etc.), matching the method already available on the MAUI controller.
+- **WPF: `AddVectorSourceUrl`, `AddRasterSource`, `AddRasterDemSource`, `AddImageSource`, `AddSourceJson`** — Five new `MlnMapHost` source methods matching the MAUI controller surface. `AddVectorSourceUrl` adds a `type:"vector"` source backed by a TileJSON URL. `AddRasterSource` and `AddRasterDemSource` add raster/raster-DEM tile sources with an optional tile-size parameter. `AddImageSource` registers an image URL as a raster source (same workaround as the MAUI controller — the C ABI does not yet support lat/lng quad coordinates). `AddSourceJson` accepts a raw MapLibre source-spec JSON object of any type, matching the method already available on the MAUI controller.
 
 ## 3.2.5
 ### 🐛 Bug fixes
