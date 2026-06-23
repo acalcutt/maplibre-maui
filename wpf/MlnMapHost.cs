@@ -160,6 +160,34 @@ public class MlnMapHost : HwndHost
         _renderNeedsUpdate = true;
     }
 
+    /// <summary>
+    /// Add a vector tile source backed by a TileJSON URL (type:"vector").
+    /// MapLibre will fetch the TileJSON descriptor and request individual
+    /// MVT tiles as the viewport changes.  No-op if the source already exists.
+    /// </summary>
+    public void AddVectorSourceUrl(string sourceId, string tileJsonUrl)
+    {
+        if (_style == null) return;
+        if (!_style.HasSource(sourceId))
+            _style.AddVectorSource(sourceId, tileJsonUrl);
+        _renderNeedsUpdate = true;
+    }
+
+    /// <summary>
+    /// Add a source from a raw MapLibre source-spec JSON object.
+    /// Accepts any source type — geojson, vector, raster, raster-dem, image, etc.
+    /// The JSON must include a <c>"type"</c> field, e.g.:
+    /// <c>{"type":"vector","url":"https://example.com/tilejson.json"}</c>
+    /// No-op if a source with <paramref name="sourceId"/> already exists.
+    /// </summary>
+    public void AddSourceJson(string sourceId, string sourceJson)
+    {
+        if (_style == null) return;
+        if (!_style.HasSource(sourceId))
+            _style.AddSourceJson(sourceId, sourceJson);
+        _renderNeedsUpdate = true;
+    }
+
     public void AddCircleLayer(
         string layerName, string sourceName, string? belowLayerId,
         string? sourceLayer, IDictionary<string, object?> properties,

@@ -7,6 +7,10 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
+## 3.2.6
+### ✨ Features and improvements
+- **WPF: `AddVectorSourceUrl` and `AddSourceJson`** — Two new `MlnMapHost` methods expose existing bindings to WPF callers. `AddVectorSourceUrl(sourceId, tileJsonUrl)` adds a `type:"vector"` source backed by a TileJSON URL so MapLibre fetches only the MVT tiles in the current viewport. `AddSourceJson(sourceId, sourceJson)` accepts a raw MapLibre source-spec JSON object of any type (`geojson`, `vector`, `raster`, `raster-dem`, `image`, etc.), matching the method already available on the MAUI controller.
+
 ## 3.2.5
 ### 🐛 Bug fixes
 - **WPF: attribution button appears above other apps when Vistumbler is in the background** — Map observer events (`onDidBecomeIdle`, `onCameraIsChanging`) fire on a background thread even while another application has focus. `onCameraIsChanging` dispatched `CollapseAttribution()` which opened `_attrButtonPopup` with no `IsActive` check; `onDidBecomeIdle` could call `RefreshAttribution()` → `ExpandAttribution()` → start `_attrCollapseTimer`, whose tick then opened the button popup 5 seconds later. Both `ExpandAttribution()` and `CollapseAttribution()` now check `parentWin?.IsActive == true` (in addition to the existing `WindowState != Minimized` guard) and skip opening any popup when the window does not have focus.
