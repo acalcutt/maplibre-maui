@@ -7,7 +7,12 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
-## 3.2.7
+## 3.2.8
+### ✨ Features and improvements
+- **`MapClicked` event on all platforms** — `MapLibreMap` (MAUI) and `MlnMapHost` (WPF) now fire a `MapClicked` / `MapClick` event with geographic coordinates (`LatLng`) and physical screen coordinates (`ScreenX`, `ScreenY`) whenever the user taps the map without panning. A pan is distinguished from a click by a 5-pixel movement threshold. `MapClickEventArgs` gains two new properties: `ScreenX` and `ScreenY`.
+- **`QueryRenderedFeaturesInBox` public helpers** — `MapLibreMap` gains two overloads of `QueryRenderedFeaturesInBox`: a centred-box helper `(cx, cy, thresholdPx, layerIds)` and a raw-box form `(x1, y1, x2, y2, layerIds)`. `MlnMapHost` gains a matching `QueryRenderedFeaturesInBox(cx, cy, thresholdPx, layerIds[])` public method. Both delegate to the existing native bindings.
+- **`LatLngToScreenPoint` on `MapLibreMap`** — new passthrough to `IMapLibreMapController.LatLngToScreenPoint`.
+- **WPF: `MlnMapClickEventArgs`** — new event-args class in `MapLibreNative.Maui.WPF` namespace carrying `ScreenX`, `ScreenY`, `Latitude`, `Longitude`.
 ### ✨ Features and improvements
 - **WPF: `RawJson` wrapper for layer paint/layout expressions** — `MlnMapHost.ApplyLayerProperties` now handles a new `public record RawJson(string Json)` type in the property dictionary. When a value is `RawJson`, its `Json` string is forwarded verbatim to `SetPaintProperty` / `SetLayoutProperty` instead of being quoted as a JSON string literal. This makes it possible to pass MapLibre expressions (e.g. `["interpolate", …]`) directly via `AddCircleLayer`'s `properties` dictionary without extra reflection.
 - **WPF: zoom-interpolated `circle-radius` for wifi layers** — `AddWifiCircleLayer` in `MaplibreWifiExtensions` now sets `circle-radius` to a linear interpolation expression (z1→1.5 px, z8→2.5 px, z13→4 px, z17→7 px, z19→9 px) instead of a fixed 5 px value, so individual AP dots scale appropriately from world overview down to street level at z19.

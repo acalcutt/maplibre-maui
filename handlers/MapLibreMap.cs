@@ -379,7 +379,39 @@ public class MapLibreMap : StackLayout
         var propertyValues = properties.ToDictionary();
         controller.AddHeatmapLayer(layerName, sourceName, propertyValues, minZoom, maxZoom, belowLayerId);
     }
-    
+
+    // ── Feature queries ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns GeoJSON of rendered features within a box centred on
+    /// (<paramref name="cx"/>, <paramref name="cy"/>) with <paramref name="thresholdPx"/>
+    /// pixels on each side, optionally filtered to <paramref name="layerIds"/>.
+    /// </summary>
+    public string? QueryRenderedFeaturesInBox(double cx, double cy, double thresholdPx = 5,
+        string? layerIds = null)
+    {
+        if (Handler is not MapLibreMapHandler handler) return null;
+        return handler.Controller.QueryRenderedFeaturesInBox(
+            cx - thresholdPx, cy - thresholdPx,
+            cx + thresholdPx, cy + thresholdPx,
+            layerIds);
+    }
+
+    /// <summary>Returns GeoJSON of rendered features within the given screen-space box.</summary>
+    public string? QueryRenderedFeaturesInBox(double x1, double y1, double x2, double y2,
+        string? layerIds = null)
+    {
+        if (Handler is not MapLibreMapHandler handler) return null;
+        return handler.Controller.QueryRenderedFeaturesInBox(x1, y1, x2, y2, layerIds);
+    }
+
+    /// <summary>Converts a geographic coordinate to a screen point (physical pixels).</summary>
+    public (double X, double Y) LatLngToScreenPoint(double latitude, double longitude)
+    {
+        if (Handler is not MapLibreMapHandler handler) return (0, 0);
+        return handler.Controller.LatLngToScreenPoint(latitude, longitude);
+    }
+
     // TODO Map parameter may want to return the controller here. 
     public event EventHandler<MapReadyEventArgs>? MapReady;
     public event EventHandler? DidBecomeIdle;

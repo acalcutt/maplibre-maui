@@ -348,6 +348,9 @@ public class MapLibreMapController : IMapLibreMapController
     private bool   _dragging;
     private int    _lastMouseX;
     private int    _lastMouseY;
+    private int    _mouseDownX;
+    private int    _mouseDownY;
+    private const int ClickThresholdPx = 5;
     private uint   _gesturePrevDist;  // previous per-frame distance for incremental WM_GESTURE zoom
 
     private static void EnsureGlWindowClassRegistered()
@@ -1667,6 +1670,8 @@ public class MapLibreMapController : IMapLibreMapController
                 _dragging  = true;
                 _lastMouseX = (short)(unchecked((int)lParam.ToInt64()) & 0xFFFF);
                 _lastMouseY = (short)((unchecked((int)lParam.ToInt64()) >> 16) & 0xFFFF);
+                _mouseDownX = _lastMouseX;
+                _mouseDownY = _lastMouseY;
                 // Convert physical px → logical for mbgl (it works in physical coords
                 // relative to its own viewport, so pass physical directly).
                 _map?.OnPanStart(_lastMouseX, _lastMouseY);
@@ -1694,6 +1699,16 @@ public class MapLibreMapController : IMapLibreMapController
                     _map?.OnPanEnd();
                     _renderNeedsUpdate = true;
                     _map?.TriggerRepaint();
+                    // Fire click if the pointer barely moved (tap, not a pan).
+                    int upX = (short)(unchecked((int)lParam.ToInt64()) & 0xFFFF);
+                    int upY = (short)((unchecked((int)lParam.ToInt64()) >> 16) & 0xFFFF);
+                    if (Math.Abs(upX - _mouseDownX) <= ClickThresholdPx &&
+                        Math.Abs(upY - _mouseDownY) <= ClickThresholdPx &&
+                        _map != null)
+                    {
+                        var ll = _map.LatLngForPixel(upX, upY);
+                        OnMapClickReceived?.Invoke(new LatLng(ll.Lat, ll.Lon));
+                    }
                 }
                 return IntPtr.Zero;
             }

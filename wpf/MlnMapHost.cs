@@ -88,6 +88,8 @@ public class MlnMapHost : HwndHost
     public event EventHandler? StyleLoaded;
     public event EventHandler? DidBecomeIdle;
     public event EventHandler? CameraIdle;
+    /// <summary>Fired when the user taps/clicks the map without panning.</summary>
+    public event EventHandler<MlnMapClickEventArgs>? MapClicked;
 
     // ── Public camera helpers ─────────────────────────────────────────────────
 
@@ -263,6 +265,24 @@ public class MlnMapHost : HwndHost
         if (_style == null) return;
         if (_style.HasSource(sourceId)) _style.RemoveSource(sourceId);
         _renderNeedsUpdate = true;
+    }
+
+    // ── Feature queries ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns GeoJSON string of features in a box around (<paramref name="cx"/>, <paramref name="cy"/>)
+    /// within <paramref name="thresholdPx"/> physical pixels on each side, optionally filtered to
+    /// the given <paramref name="layerIds"/>. Returns <c>null</c> when the map is not ready.
+    /// </summary>
+    public string? QueryRenderedFeaturesInBox(double cx, double cy, double thresholdPx = 5,
+        string[]? layerIds = null)
+    {
+        if (_map == null) return null;
+        string? filter = layerIds is { Length: > 0 } ? string.Join(",", layerIds) : null;
+        return _map.QueryRenderedFeaturesInBox(
+            cx - thresholdPx, cy - thresholdPx,
+            cx + thresholdPx, cy + thresholdPx,
+            filter);
     }
 
     // ── Location indicator ("blue dot") ──────────────────────────────────────
@@ -456,6 +476,9 @@ public class MlnMapHost : HwndHost
     private bool  _isDragging;
     private int   _lastMouseX;
     private int   _lastMouseY;
+    private int   _mouseDownX;
+    private int   _mouseDownY;
+    private const int ClickThresholdPx = 5;
 
     private const int WM_LBUTTONDOWN   = 0x0201;
     private const int WM_LBUTTONUP     = 0x0202;
@@ -873,6 +896,7 @@ public class MlnMapHost : HwndHost
                 case WM_LBUTTONDOWN:
                     _isDragging = true;
                     _lastMouseX = cx; _lastMouseY = cy;
+                    _mouseDownX = cx; _mouseDownY = cy;
                     SetCapture(hwnd);
                     _map.OnPanStart(cx, cy);
                     handled = true;
@@ -898,6 +922,14 @@ public class MlnMapHost : HwndHost
                         _map.OnPanEnd();
                         _renderNeedsUpdate = true;
                         _map.TriggerRepaint();
+                        // Fire MapClicked if the mouse barely moved (tap/click, not a pan).
+                        int dx = cx - _mouseDownX;
+                        int dy = cy - _mouseDownY;
+                        if (Math.Abs(dx) <= ClickThresholdPx && Math.Abs(dy) <= ClickThresholdPx)
+                        {
+                            var ll = _map.LatLngForPixel(cx, cy);
+                            MapClicked?.Invoke(this, new MlnMapClickEventArgs(cx, cy, ll.Lat, ll.Lon));
+                        }
                         handled = true;
                     }
                     break;
@@ -1354,4 +1386,25 @@ public class MlnMapHost : HwndHost
     /// Use this for MapLibre expressions, e.g. ["interpolate", ...] for circle-radius.
     /// </summary>
     public record RawJson(string Json);
+}
+
+/// <summary>Event args for <see cref="MlnMapHost.MapClicked"/>.</summary>
+public sealed class MlnMapClickEventArgs : EventArgs
+{
+    /// <summary>Physical pixel X within the map viewport at the time of the click.</summary>
+    public double ScreenX { get; }
+    /// <summary>Physical pixel Y within the map viewport at the time of the click.</summary>
+    public double ScreenY { get; }
+    /// <summary>Geographic latitude corresponding to the click position.</summary>
+    public double Latitude { get; }
+    /// <summary>Geographic longitude corresponding to the click position.</summary>
+    public double Longitude { get; }
+
+    internal MlnMapClickEventArgs(double screenX, double screenY, double latitude, double longitude)
+    {
+        ScreenX   = screenX;
+        ScreenY   = screenY;
+        Latitude  = latitude;
+        Longitude = longitude;
+    }
 }
