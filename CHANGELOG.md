@@ -7,6 +7,11 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
+## 3.2.7
+### ✨ Features and improvements
+- **WPF: `RawJson` wrapper for layer paint/layout expressions** — `MlnMapHost.ApplyLayerProperties` now handles a new `public record RawJson(string Json)` type in the property dictionary. When a value is `RawJson`, its `Json` string is forwarded verbatim to `SetPaintProperty` / `SetLayoutProperty` instead of being quoted as a JSON string literal. This makes it possible to pass MapLibre expressions (e.g. `["interpolate", …]`) directly via `AddCircleLayer`'s `properties` dictionary without extra reflection.
+- **WPF: zoom-interpolated `circle-radius` for wifi layers** — `AddWifiCircleLayer` in `MaplibreWifiExtensions` now sets `circle-radius` to a linear interpolation expression (z1→1.5 px, z8→2.5 px, z13→4 px, z17→7 px, z19→9 px) instead of a fixed 5 px value, so individual AP dots scale appropriately from world overview down to street level at z19.
+
 ## 3.2.6
 ### ✨ Features and improvements
 - **WPF: `AddVectorSourceUrl`, `AddRasterSource`, `AddRasterDemSource`, `AddImageSource`, `AddSourceJson`** — Five new `MlnMapHost` source methods matching the MAUI controller surface. `AddVectorSourceUrl` adds a `type:"vector"` source backed by a TileJSON URL. `AddRasterSource` and `AddRasterDemSource` add raster/raster-DEM tile sources with an optional tile-size parameter. `AddImageSource` now accepts full lat/lng quad corner coordinates (top-right, top-left, bottom-right, bottom-left) backed by the already-implemented `mbgl_style_add_image_source` C ABI function. `AddSourceJson` accepts a raw MapLibre source-spec JSON object of any type.

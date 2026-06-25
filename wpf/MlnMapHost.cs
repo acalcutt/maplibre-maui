@@ -1332,6 +1332,7 @@ public class MlnMapHost : HwndHost
             if (val == null) continue;
             string json = val switch
             {
+                RawJson r => r.Json,
                 string s  => $"\"{s}\"",
                 bool   b  => b ? "true" : "false",
                 double d  => d.ToString(ic),
@@ -1346,4 +1347,11 @@ public class MlnMapHost : HwndHost
                 layer.SetPaintProperty(name, json);
         }
     }
+
+    /// <summary>
+    /// Wraps a pre-serialised JSON string so that <see cref="ApplyLayerProperties"/> forwards
+    /// it verbatim to SetPaintProperty/SetLayoutProperty rather than quoting it as a string.
+    /// Use this for MapLibre expressions, e.g. ["interpolate", ...] for circle-radius.
+    /// </summary>
+    public record RawJson(string Json);
 }
