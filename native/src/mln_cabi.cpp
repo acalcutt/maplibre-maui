@@ -1483,9 +1483,23 @@ const char* mln_cabi_version() noexcept {
 #include <android/native_window_jni.h>
 #include <jni.h>
 
+// This standalone NDK build never runs the JNI_OnLoad that the upstream
+// MapLibre Android SDK normally uses to populate mbgl::android::theJVM, so
+// every background thread that calls attachThread() (e.g. the RunLoop's
+// "Alarm" thread) aborts on assert(vm != nullptr) in jni.cpp. Capture the
+// JavaVM here — the first JNIEnv we're handed, on the surface-creation path
+// that always runs before the RunLoop/Alarm thread is spawned.
+namespace mbgl { namespace android {
+extern JavaVM* theJVM;
+}} // namespace mbgl::android
+
 void* mbgl_android_acquire_window(void* jni_env, void* surface_jobject) noexcept {
+    JNIEnv* env = reinterpret_cast<JNIEnv*>(jni_env);
+    if (!mbgl::android::theJVM) {
+        env->GetJavaVM(&mbgl::android::theJVM);
+    }
     return ANativeWindow_fromSurface(
-        reinterpret_cast<JNIEnv*>(jni_env),
+        env,
         reinterpret_cast<jobject>(surface_jobject));
 }
 

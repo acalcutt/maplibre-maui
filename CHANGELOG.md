@@ -7,6 +7,13 @@
 ### 🐞 Bug fixes
 - _...Add new stuff here..._
 
+## 3.2.9
+### ✨ Features and improvements
+- _...Add new stuff here..._
+
+### 🐞 Bug fixes
+- **Android: app crashed every time a map view was created** — this standalone NDK build of `mln-cabi` never runs the `JNI_OnLoad` that the upstream MapLibre Android SDK normally uses to populate `mbgl::android::theJVM`. Every background thread that calls `attachThread()` (notably the `RunLoop`'s "Alarm" timer thread, spawned as soon as a map is constructed) hit `assert(vm != nullptr)` in `jni.cpp` and aborted the process — on every Android device and ABI, not just emulators. Fixed by capturing the `JavaVM*` via `JNIEnv::GetJavaVM()` in `mbgl_android_acquire_window()`, which already receives a `JNIEnv*` on the surface-creation path that runs before the `RunLoop`/Alarm thread is spawned.
+
 ## 3.2.8
 ### ✨ Features and improvements
 - **`MapClicked` event on all platforms** — `MapLibreMap` (MAUI) and `MlnMapHost` (WPF) now fire a `MapClicked` / `MapClick` event with geographic coordinates (`LatLng`) and physical screen coordinates (`ScreenX`, `ScreenY`) whenever the user taps the map without panning. A pan is distinguished from a click by a 5-pixel movement threshold. `MapClickEventArgs` gains two new properties: `ScreenX` and `ScreenY`.
