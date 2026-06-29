@@ -13,6 +13,7 @@
 
 ### 🐞 Bug fixes
 - **Android: app crashed every time a map view was created** — this standalone NDK build of `mln-cabi` never runs the `JNI_OnLoad` that the upstream MapLibre Android SDK normally uses to populate `mbgl::android::theJVM`. Every background thread that calls `attachThread()` (notably the `RunLoop`'s "Alarm" timer thread, spawned as soon as a map is constructed) hit `assert(vm != nullptr)` in `jni.cpp` and aborted the process — on every Android device and ABI, not just emulators. Fixed by capturing the `JavaVM*` via `JNIEnv::GetJavaVM()` in `mbgl_android_acquire_window()`, which already receives a `JNIEnv*` on the surface-creation path that runs before the `RunLoop`/Alarm thread is spawned.
+- **Android: divide-by-zero crash on first map render** — `EGLFrontend` constructed its `BackendScope` with `ScopeType::Implicit`, which assumes the EGL/GL context is already current and is a no-op otherwise. On Windows/Apple this is true because the C# caller (or system callback) makes the context current itself; on Android, nothing ever did, so `eglMakeCurrent` was never called. The first GL call (`glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, ...)`) silently failed against the uncurrent context, leaving the queried alignment at `0` and causing a `SIGFPE` in `Buffer::align()`. Fixed by using `ScopeType::Explicit` in `EGLFrontend::render()`/`~EGLFrontend()`, which makes the `BackendScope` itself call `EGLBackend::activate()`/`deactivate()`.
 
 ## 3.2.8
 ### ✨ Features and improvements

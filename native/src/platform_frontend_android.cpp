@@ -109,7 +109,12 @@ public:
     {}
 
     ~EGLFrontend() override {
-        mbgl::gfx::BackendScope guard(_backend, mbgl::gfx::BackendScope::ScopeType::Implicit);
+        // Unlike Windows/Apple, nothing on the Android side ever calls
+        // eglMakeCurrent() outside of EGLBackend::activate(). ScopeType::Implicit
+        // assumes the context is already current (true on Windows, where the C#
+        // caller calls wglMakeCurrent itself) and is a no-op otherwise, so this
+        // must be Explicit to actually make our EGL context current.
+        mbgl::gfx::BackendScope guard(_backend, mbgl::gfx::BackendScope::ScopeType::Explicit);
         _renderer.reset();
     }
 
@@ -134,7 +139,9 @@ public:
             params = std::move(_updateParams);
         }
         if (!params) return;
-        mbgl::gfx::BackendScope guard(_backend, mbgl::gfx::BackendScope::ScopeType::Implicit);
+        // Explicit: see comment in ~EGLFrontend() above — nothing else ever
+        // makes our EGL context current on Android.
+        mbgl::gfx::BackendScope guard(_backend, mbgl::gfx::BackendScope::ScopeType::Explicit);
         _renderer->render(params);
         _backend.swapBuffers();
     }
