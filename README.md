@@ -1,7 +1,7 @@
-# maplibre-maui
+# MaplibreNativeMAUI
 
 [![License](https://img.shields.io/badge/License-BSD_2--Clause-blue.svg)](/LICENSE)
-[![CI](https://github.com/acalcutt/maplibre-maui/actions/workflows/ci.yml/badge.svg)](https://github.com/acalcutt/maplibre-maui/actions/workflows/ci.yml)
+[![CI](https://github.com/TechIdiots-LLC/MaplibreNativeMAUI/actions/workflows/ci.yml/badge.svg)](https://github.com/TechIdiots-LLC/MaplibreNativeMAUI/actions/workflows/ci.yml)
 
 _.NET MAUI library for rendering interactive maps with [MapLibre Native](https://github.com/maplibre/maplibre-native) on Android, iOS, macCatalyst, and Windows._
 
@@ -46,9 +46,9 @@ MapLibre Native is included as a **git submodule** at `dependencies/maplibre-nat
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:maplibre="clr-namespace:Maui.MapLibre.Handlers;assembly=MapLibreNative.Maui.Handlers"
-             xmlns:layers="clr-namespace:Maui.MapLibre.Handlers.Layers;assembly=MapLibreNative.Maui.Handlers"
-             xmlns:sources="clr-namespace:Maui.MapLibre.Handlers.Sources;assembly=MapLibreNative.Maui.Handlers"
+             xmlns:maplibre="clr-namespace:MapLibreNative.Maui.Handlers;assembly=MapLibreNative.Maui.Handlers"
+             xmlns:layers="clr-namespace:MapLibreNative.Maui.Handlers.Layers;assembly=MapLibreNative.Maui.Handlers"
+             xmlns:sources="clr-namespace:MapLibreNative.Maui.Handlers.Sources;assembly=MapLibreNative.Maui.Handlers"
              x:Class="MyApp.MainPage">
 
     <maplibre:MapLibreMap StyleUrl="https://demotiles.maplibre.org/style.json"
@@ -328,7 +328,7 @@ The `MbglDebugOptions` enum in `MapLibreNative.Maui` names the individual bits (
 For WPF apps (not MAUI), use `MlnMapHost` from `MapLibreNative.Maui.WPF`:
 
 ```xml
-xmlns:mlwpf="clr-namespace:Maui.MapLibre.WPF;assembly=MapLibreNative.Maui.WPF"
+xmlns:mlwpf="clr-namespace:MapLibreNative.Maui.WPF;assembly=MapLibreNative.Maui.WPF"
 
 <mlwpf:MlnMapHost x:Name="MapHost"
                   StyleUrl="https://demotiles.maplibre.org/style.json"
@@ -355,7 +355,7 @@ xmlns:mlwpf="clr-namespace:Maui.MapLibre.WPF;assembly=MapLibreNative.Maui.WPF"
 ### Clone with submodules
 
 ```sh
-git clone --recurse-submodules https://github.com/acalcutt/maplibre-maui.git
+git clone --recurse-submodules https://github.com/TechIdiots-LLC/MaplibreNativeMAUI.git
 ```
 
 Or if you already cloned without submodules:

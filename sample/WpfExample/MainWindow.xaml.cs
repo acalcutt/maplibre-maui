@@ -22,7 +22,7 @@ public partial class MainWindow : Window
     private double _currentZoom = 9;
 
     // ── Data-driven circle-color investigation ──────────────────────────────────
-    // See https://github.com/acalcutt/maplibre-maui investigate/runtime-data-driven-circle-color.
+    // See https://github.com/TechIdiots-LLC/MaplibreNativeMAUI investigate/runtime-data-driven-circle-color.
     // Reproduces (minimally, without a basemap or vector tiles) the VistumblerCS
     // symptom: a circle-color value that depends on a per-feature property renders
     // zero features when added at RUNTIME (AddGeoJsonSource + AddCircleLayer after

@@ -5,10 +5,10 @@
     Individual .csproj files set <PackageId> and project-specific properties.
   -->
   <PropertyGroup Condition="'$(IsPackable)' != 'false'">
-    <Authors>Andrew Calcutt</Authors>
+    <Authors>TechIdiots LLC</Authors>
     <PackageLicenseExpression>BSD-2-Clause</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <RepositoryUrl>https://github.com/acalcutt/maplibre-maui</RepositoryUrl>
+    <RepositoryUrl>https://github.com/TechIdiots-LLC/MaplibreNativeMAUI</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
