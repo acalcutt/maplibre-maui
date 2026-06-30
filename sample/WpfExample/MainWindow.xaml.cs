@@ -277,65 +277,64 @@ public partial class MainWindow : Window
             DdLog($"{layerId}: featureCount={CountFeatures(json)} error={error ?? "(none)"} json={Truncate(json, 600)}");
         }
 
-        // ── Real-world comparison: the actual WifiDB vector-tile source VistumblerCS
-        // uses, instead of a local GeoJSON source. Same property+stops circle-color
-        // on "sectype" (1/2/3), same runtime AddVectorSourceUrl + AddCircleLayer
-        // pattern. Network-dependent — wrapped so a fetch failure doesn't abort the
-        // GeoJSON results above.
+        // ── Vector-tile source-layer test ───────────────────────────────────────
+        // The GeoJSON cases above never set a source-layer; the real-world failure
+        // mode is a circle layer added at runtime against a *vector* source with a
+        // source-layer (the AddCircleLayer + SetSourceLayer pattern). Uses the public
+        // MapLibre demotiles basemap vector source ("maplibre"), source-layer
+        // "centroids" (one point per country) — no external/private tile server.
+        //
+        // Before the mln_cabi setSourceLayer relayout fix this rendered zero features
+        // (the source-layer change after addLayer never triggered a tile relayout);
+        // after the fix both the literal control and the data-driven (match on the
+        // string field NAME) layers render one circle per country centroid.
         try
         {
-            MapHost.AddVectorSourceUrl("ddtest-vt-src", "https://wifidb.net/api/tilejson.php?bucket=daily");
-            DdLog("AddVectorSourceUrl(ddtest-vt-src) -> https://wifidb.net/api/tilejson.php?bucket=daily");
             MapHost.AddCircleLayer(
-                layerName:    "ddtest-vt-stops",
-                sourceName:   "ddtest-vt-src",
+                layerName:    "ddtest-vt-match",
+                sourceName:   "maplibre",
                 belowLayerId: null,
-                sourceLayer:  "daily",
+                sourceLayer:  "centroids",
                 properties: new Dictionary<string, object?>
                 {
-                    ["circle-radius"] = 30.0,
-                    ["circle-color"] = new Dictionary<string, object?>
+                    ["circle-radius"]  = 6.0,
+                    ["circle-color"]   = new object[]
                     {
-                        ["property"] = "sectype",
-                        ["stops"] = new object[]
-                        {
-                            new object[] { 1, "#ff0000" },
-                            new object[] { 2, "#00ff00" },
-                            new object[] { 3, "#0000ff" },
-                        },
+                        "match", new object[] { "get", "NAME" },
+                        "Canada", "#00ff00",
+                        "#ff0000", // default
                     },
                     ["circle-opacity"] = 1.0,
                 });
-            DdLog("AddCircleLayer(ddtest-vt-stops) sourceLayer=daily circle-color=property+stops(sectype)");
+            DdLog("AddCircleLayer(ddtest-vt-match) sourceLayer=centroids circle-color=match(NAME)");
 
             MapHost.AddCircleLayer(
                 layerName:    "ddtest-vt-literal",
-                sourceName:   "ddtest-vt-src",
+                sourceName:   "maplibre",
                 belowLayerId: null,
-                sourceLayer:  "daily",
+                sourceLayer:  "centroids",
                 properties: new Dictionary<string, object?>
                 {
-                    ["circle-radius"]  = 30.0,
+                    ["circle-radius"]  = 6.0,
                     ["circle-color"]   = "#ff0000",
                     ["circle-opacity"] = 1.0,
                 });
-            DdLog("AddCircleLayer(ddtest-vt-literal) sourceLayer=daily circle-color=literal (control)");
+            DdLog("AddCircleLayer(ddtest-vt-literal) sourceLayer=centroids circle-color=literal (control)");
         }
         catch (Exception ex)
         {
             DdLog($"vector-tile test setup THREW: {ex}");
         }
 
-        // Centre on a region likely to actually have WifiDB daily data, and give the
-        // network fetch + tile parse + render noticeably longer than the local-geojson case.
-        MapHost.CenterOn(42.3601, -71.0589, zoom: 8); // Boston, MA
-        await Task.Delay(6000);
+        // World view so country centroids are on-screen; demotiles maxzoom is 6.
+        MapHost.CenterOn(20.0, 0.0, zoom: 2);
+        await Task.Delay(4000);
 
         double cx = MapHost.ActualWidth / 2;
         double cy = MapHost.ActualHeight / 2;
         double threshold = Math.Max(MapHost.ActualWidth, MapHost.ActualHeight); // cover the whole window
 
-        foreach (var layerId in new[] { "ddtest-vt-literal", "ddtest-vt-stops" })
+        foreach (var layerId in new[] { "ddtest-vt-literal", "ddtest-vt-match" })
         {
             string? json = null;
             string? error = null;
