@@ -15,8 +15,8 @@ public interface IMapLibreMapController : IMapLibreMapOptionsSink
     public event Action? OnCameraIdleReceived;
     public event Action<int>? OnCameraTrackingChangedReceived;
     public event Action? OnCameraTrackingDismissedReceived;
-    public event Func<LatLng, bool>? OnMapClickReceived;
-    public event Func<LatLng, bool>? OnMapLongClickReceived;
+    public event Func<LatLng, double, double, bool>? OnMapClickReceived;
+    public event Func<LatLng, double, double, bool>? OnMapLongClickReceived;
     public event Action<Style>? OnStyleLoadedReceived;
     public event Action<Location>? OnUserLocationUpdateReceived;
     /// <summary>Fired when the map fails to load its style. The string is the error message.</summary>
